@@ -6,7 +6,10 @@
  */
 export { DocumentSigningServiceError } from "@/services/document-signing/errors"
 export {
+  cancelDocumentSigning,
   completePublicDocumentSigning,
+  declinePublicDocumentSigning,
+  fillGeneratedDocumentAnswers,
   getGeneratedDocumentSigningView,
   getPublicDocumentSigningView,
   resendDocumentSigningInvitation,
@@ -14,3 +17,4 @@ export {
   sendDocumentForSigning,
   updateGeneratedDocumentContent,
 } from "@/services/document-signing/workflows"
+export { openSignedCopy, sendSignedCopies } from "@/services/document-signing/signed-copies"

@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest"
 import { TemplatePreview } from "@/components/templates/template-preview"
 import {
   createTemplateRenderPlan,
+  fitMargins,
+  marginSizeOf,
   resizeTemplateLayout,
   resolvePageGeometry,
   shouldRenderTemplateFooter,
@@ -12,6 +14,8 @@ import {
 } from "@/services/templates/template-render-plan"
 import {
   createBlankTemplateContent,
+  MARGIN_SIZES,
+  templateContentV3Schema,
   templateLayoutSchema,
   type TemplateContentV2,
   type TemplateContentV3
@@ -20,6 +24,7 @@ import { insertTemplateBlock } from "@/types/template-structure"
 
 const SOURCE_ID = "10000000-0000-4000-8000-000000000001"
 const CONDITIONAL_ID = "10000000-0000-4000-8000-000000000002"
+const SECOND_CONDITIONAL_ID = "10000000-0000-4000-8000-000000000009"
 const FINAL_ID = "10000000-0000-4000-8000-000000000003"
 const SECTION_ID = "10000000-0000-4000-8000-000000000011"
 const GROUP_ID = "10000000-0000-4000-8000-000000000021"
@@ -92,6 +97,39 @@ describe("template render plan", () => {
       CONDITIONAL_ID,
       FINAL_ID
     ])
+  })
+
+  it("keeps every branch on a blank form, cueing each branch once by its rule", () => {
+    const structured = createStructuredContent()
+    const content = insertTemplateBlock(structured, CONDITIONAL_ID, {
+      id: SECOND_CONDITIONAL_ID,
+      type: "paragraph",
+      text: "More details.",
+      alignment: "left",
+      visibleWhen: { sourceBlockId: SOURCE_ID, operator: "equals", value: true }
+    })
+    const cues = (mode: "blank" | "final") =>
+      createTemplateRenderPlan({ title: "Approval", content, answers: { include_details: false }, mode }).blocks.map(
+        ({ block, cue }) => [block.id, cue]
+      )
+
+    expect(cues("blank")).toEqual([
+      [SOURCE_ID, null],
+      [CONDITIONAL_ID, "If Include details is ticked:"],
+      [SECOND_CONDITIONAL_ID, null],
+      [FINAL_ID, null]
+    ])
+    expect(cues("final")).toEqual([
+      [SOURCE_ID, null],
+      [FINAL_ID, null]
+    ])
+    expect(
+      renderToStaticMarkup(
+        createElement(TemplatePreview, {
+          renderPlan: createTemplateRenderPlan({ title: "Approval", content, mode: "blank" })
+        })
+      )
+    ).toContain("If Include details is ticked:")
   })
 
   it("decorates blocks from one canonical order without duplicating structure", () => {
@@ -404,7 +442,9 @@ describe("template render plan", () => {
 })
 
 function createStructuredContent(): TemplateContentV3 {
-  let content = createBlankTemplateContent()
+  const blank = createBlankTemplateContent()
+  // At the preset margins, so a layout's marginPreset is what decides them.
+  let content: TemplateContentV3 = { ...blank, layout: { ...blank.layout, margins: undefined } }
 
   content = insertTemplateBlock(content, null, {
     id: SOURCE_ID,
@@ -467,3 +507,72 @@ function createStructuredContent(): TemplateContentV3 {
     ]
   }
 }
+
+describe("clause numbering", () => {
+  const id = (n: number): string => `30000000-0000-4000-8000-0000000000${String(n).padStart(2, "0")}`
+  const list = (n: number, items: number, levels?: number[]) => ({
+    id: id(n),
+    type: "numbered_list",
+    items: Array.from({ length: items }, (_, index) => `Item ${index + 1}`),
+    ...(levels ? { levels } : {}),
+  })
+  const numbered = (sectionNumbers: "clauses" | "numbers"): TemplateContentV3 => {
+    const blank = createBlankTemplateContent()
+
+    return templateContentV3Schema.parse({
+      ...blank,
+      layout: { ...blank.layout, sectionNumbers },
+      blocks: [
+        list(1, 2),
+        { id: id(2), type: "paragraph", text: "Between the lists.", alignment: "left" },
+        list(3, 7, [0, 1, 1, 2, 2, 0, 1]),
+        list(4, 1),
+        // A level can only go one deeper than the item above it, and a list starts at the top.
+        list(5, 3, [2, 2, 1]),
+      ],
+      sections: [
+        { id: id(11), label: "Services", startBlockId: id(1), pageBreakBefore: false, keepTogether: false },
+        { id: id(12), label: "Fees", startBlockId: id(4), pageBreakBefore: false, keepTogether: false },
+      ],
+    }) as TemplateContentV3
+  }
+  const markers = (content: TemplateContentV3): Array<readonly string[] | null> =>
+    createTemplateRenderPlan({ content, mode: "final", title: "Agreement" }).blocks.map((block) => block.listMarkers)
+
+  it("numbers a section's lists on from its own number, 3.1 and 3.2, with (a) and (i) under them", () => {
+    expect(markers(numbered("clauses"))).toEqual([
+      ["1.1", "1.2"],
+      null,
+      ["1.3", "(a)", "(b)", "(i)", "(ii)", "1.4", "(a)"],
+      ["2.1"],
+      ["2.2", "(a)", "(b)"],
+    ])
+    expect(createTemplateRenderPlan({ content: numbered("clauses"), mode: "final", title: "Agreement" }).blocks[3]?.sectionNumber).toBe("2.")
+  })
+
+  it("prints the same numbers in the preview and thumbnails: each section's number, then its clauses", () => {
+    const markup = renderToStaticMarkup(createElement(TemplatePreview, { renderPlan: createTemplateRenderPlan({ content: numbered("clauses"), mode: "final", title: "Agreement" }) }))
+
+    for (const printed of [">1. Services<", ">2. Fees<", ">1.3<", ">(ii)<", ">2.2<"]) {
+      expect(markup).toContain(printed)
+    }
+  })
+
+  it("starts each list at 1 under other numbering, keeping the levels", () => {
+    expect(markers(numbered("numbers"))).toEqual([["1.", "2."], null, ["1.", "(a)", "(b)", "(i)", "(ii)", "2.", "(a)"], ["1."], ["1.", "(a)", "(b)"]])
+  })
+})
+
+describe("margins", () => {
+  it("starts new paper at an inch all round, keeps older content's preset, and names a size only when all four sides match", () => {
+    const blank = createBlankTemplateContent().layout
+
+    expect(resolvePageGeometry(blank).margins).toEqual({ top: 72, right: 72, bottom: 72, left: 72 })
+    // Content saved before keeps the margins it was made with.
+    expect(resolvePageGeometry({ ...blank, margins: undefined }).margins.left).toBe(40)
+    expect(marginSizeOf(resolvePageGeometry(blank).margins)).toBe("normal")
+    expect(marginSizeOf({ ...MARGIN_SIZES.wide, left: 100 })).toBeNull()
+    // Each side held to its page: none below 0, none past 40% of the page.
+    expect(fitMargins({ heightPoints: 100, widthPoints: 100 }, { top: -5, right: 999, bottom: 10.4, left: 39.6 })).toEqual({ top: 0, right: 40, bottom: 10, left: 40 })
+  })
+})

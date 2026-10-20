@@ -23,14 +23,14 @@ export function OfflineDraftBanner(): ReactElement | null {
 
   return (
     <div className="fixed right-4 bottom-[calc(3.5rem+1rem+env(safe-area-inset-bottom))] z-50 max-w-md md:bottom-4 animate-in fade-in slide-in-from-bottom-5">
-      <Alert variant="destructive">
+      {/* Not an alarm: editors keep what is typed on the device (local
+          recovery) and save it once the connection is back. */}
+      <Alert>
         <WifiOff className="size-4" />
-        <AlertTitle className="flex items-center gap-2">
-          <span>You are offline</span>
-        </AlertTitle>
+        <AlertTitle>You&apos;re offline</AlertTitle>
         <AlertDescription className="text-xs">
-          Saving and submitting are unavailable until your connection is
-          restored. Keep this tab open so your unsaved input is not lost.
+          Document and template edits are kept on this device and save when
+          you&apos;re back online. Other pages open once you reconnect.
         </AlertDescription>
       </Alert>
     </div>

@@ -150,6 +150,18 @@ describe("sendToAnswer", () => {
     ;(tables.documents[0] as FakeRow).lifecycle_state = "active"
     expect(await open()).toMatchObject({ valid: true })
   })
+
+  it("closes a template's links while it is in Trash, and sends no document made from a template there", async () => {
+    const { client, tables } = sendable()
+    await send(client, ["ana@example.com"], {}, { kind: "template", templateId: TEMPLATE_ID })
+    const open = () => getPublicFormLinkByToken(TOKENS[0]!, { client: client as never, now: () => NOW })
+
+    Object.assign(tables.document_templates[0] as FakeRow, { status: "archived", trashed_at: NOW.toISOString() })
+    expect(await open()).toMatchObject({ valid: false })
+    await expect(send(client, ["bo@example.com"])).rejects.toMatchObject({ statusCode: 409 })
+    Object.assign(tables.document_templates[0] as FakeRow, { status: "published", trashed_at: null })
+    expect(await open()).toMatchObject({ valid: true })
+  })
 })
 
 describe("send to answer, when something is wrong", () => {

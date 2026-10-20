@@ -5,7 +5,7 @@ import {
   renderGeneratedDocumentPdf,
   DocumentPdfServiceError,
 } from "@/services/document-pdf-service"
-import { DocumentSigningServiceError } from "@/services/document-signing-service"
+import { DocumentSigningServiceError, sendSignedCopies } from "@/services/document-signing-service"
 import { loadGeneratedDocumentView } from "@/services/document-signing/persistence"
 import { readTemplateImage } from "@/services/template-image-service"
 import type {
@@ -277,13 +277,20 @@ export async function finalizeCompletedGeneratedDocument(
     return false
   }
 
-  return finalizeGeneratedDocumentPdf(
+  const finalized = await finalizeGeneratedDocumentPdf(
     { actorUserId: document.createdBy, organizationId: document.organizationId, documentId: document.id },
     deps
   ).then(
     () => true,
     () => false
   )
+
+  if (finalized) {
+    // Best effort, and once: a document whose copies went out is left alone.
+    await (deps.sendSignedCopies ?? sendSignedCopies)({ organizationId: document.organizationId, documentId: document.id }).catch(() => undefined)
+  }
+
+  return finalized
 }
 
 /** Completed documents one sweep finalizes, each rendered in turn. */

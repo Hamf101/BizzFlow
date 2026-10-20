@@ -9,11 +9,17 @@ import type { TemplateLayout } from "@/types/template"
 const SIDES: readonly PageSide[] = ["top", "right", "bottom", "left"]
 const OPPOSITE = { bottom: "top", left: "right", right: "left", top: "bottom" } as const satisfies Record<PageSide, PageSide>
 const AXIS = { bottom: "y", left: "x", right: "x", top: "y" } as const
+const CORNERS = [["top", "left"], ["top", "right"], ["bottom", "left"], ["bottom", "right"]] as const
+// The marks' length, size-3.
+const CORNER_PX = 12
 
 /**
- * The page's margins as dashed lines to drag, in the points the PDF prints
- * them at. Dragging one moves the one across from it too. Focused, the arrow keys move one a point at a time, or ten with
- * Shift. Every page shows them; only the first page's are in the tab order,
+ * The page's margins as lines to drag, shown at rest only as marks at the
+ * writing area's corners, in the points the PDF prints
+ * them at. Dragging one moves the one across from it too, so the page stays
+ * even; dragging with the right button, or holding Alt (Option), moves it
+ * alone. Focused, the arrow keys move a pair a point at a time, or ten with
+ * Shift, and with Alt just the one. Every page shows them; only the first page's are in the tab order,
  * so the keyboard meets them once.
  *
  * @param props - The layout, how to change it, the page's scale, and whether this is the first page.
@@ -34,13 +40,17 @@ export function MarginGuides({
   zoom: number
 }): ReactElement {
   const geometry = resolvePageGeometry(layout)
-  const drag = useRef<{ from: number; value: number } | null>(null)
+  const drag = useRef<{ alone: boolean; from: number; value: number } | null>(null)
 
-  // Margins move in pairs, so the page stays even: left with right, top with bottom.
-  function set(side: PageSide, value: number): void {
+  // Margins move in pairs, so the page stays even: left with right, top with
+  // bottom. One moved alone leaves the one across from it where it is.
+  function set(side: PageSide, value: number, alone: boolean): void {
     const margin = Math.round(Math.max(0, Math.min(maxMargin(geometry, side), value)))
 
-    onChange({ ...layout, margins: { ...geometry.margins, [side]: margin, [OPPOSITE[side]]: margin } }, `margin:${AXIS[side]}`)
+    onChange(
+      { ...layout, margins: { ...geometry.margins, [side]: margin, ...(alone ? {} : { [OPPOSITE[side]]: margin }) } },
+      alone ? `margin:${side}` : `margin:${AXIS[side]}`
+    )
   }
 
   return (
@@ -61,7 +71,8 @@ export function MarginGuides({
             aria-valuenow={value}
             aria-valuetext={`${value} points`}
             className={cn(
-              "absolute z-20 touch-none border-dashed border-primary/25 outline-none hover:border-primary/70 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40",
+              // Hidden until a pointer or the keyboard finds it; the corner marks say where it is.
+              "absolute z-20 touch-none border-dashed border-transparent outline-none hover:border-primary/70 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40 active:border-primary/70",
               across ? "inset-y-0 w-2.5 cursor-ew-resize" : "inset-x-0 h-2.5 cursor-ns-resize",
               { bottom: "translate-y-full border-t", left: "-translate-x-full border-r", right: "translate-x-full border-l", top: "-translate-y-full border-b" }[side]
             )}
@@ -71,28 +82,43 @@ export function MarginGuides({
 
               if (step) {
                 event.preventDefault()
-                set(side, value + inward * step * (event.shiftKey ? 10 : 1))
+                set(side, value + inward * step * (event.shiftKey ? 10 : 1), event.altKey)
               }
             }}
+            // The right button drags one margin, so it opens no menu here.
+            onContextMenu={(event) => event.preventDefault()}
             onPointerCancel={() => (drag.current = null)}
             onPointerDown={(event) => {
               event.preventDefault()
               event.currentTarget.setPointerCapture(event.pointerId)
-              drag.current = { from: across ? event.clientX : event.clientY, value }
+              drag.current = { alone: event.button === 2 || event.altKey, from: across ? event.clientX : event.clientY, value }
             }}
             onPointerMove={(event) => {
               if (drag.current) {
-                set(side, drag.current.value + (inward * ((across ? event.clientX : event.clientY) - drag.current.from)) / (point * zoom))
+                set(side, drag.current.value + (inward * ((across ? event.clientX : event.clientY) - drag.current.from)) / (point * zoom), drag.current.alone)
               }
             }}
             onPointerUp={() => (drag.current = null)}
             role="slider"
             style={{ [side]: value * point }}
             tabIndex={first ? 0 : -1}
-            title={`${value} pt`}
+            title={`${value} pt. Drag to move both sides; right-click and drag to move this one.`}
           />
         )
       })}
+      {/* The writing area's corners, marked as a word processor marks them. */}
+      {CORNERS.map(([y, x]) => (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute size-3 border-primary/35",
+            y === "top" ? "border-b" : "border-t",
+            x === "left" ? "border-r" : "border-l"
+          )}
+          key={`${y}-${x}`}
+          style={{ [x]: geometry.margins[x] * point - CORNER_PX, [y]: geometry.margins[y] * point - CORNER_PX }}
+        />
+      ))}
     </>
   )
 }

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { z } from "zod"
+import * as z from "zod"
 
 import { enforceOutboundEmailRateLimit } from "@/lib/action-rate-limit"
 import { buildFeedbackRedirect } from "@/lib/action-result"

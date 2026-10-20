@@ -10,14 +10,14 @@ import { resolve } from "node:path"
  * guarantees a confusing "Invalid API key" the first time someone's stack
  * differs. Reading them back from `supabase status` keeps the two in step.
  *
- * MinIO stands in for Cloudflare R2. The app talks to R2 over the S3 API with
+ * The local S3 gateway (docker-compose.yml) stands in for Cloudflare R2. The app talks to R2 over the S3 API with
  * `forcePathStyle`, so the only things that change are the endpoint and the
  * credentials.
  */
 
 const OUTPUT_PATH = resolve(process.cwd(), ".env.e2e")
 
-const MINIO = {
+const STORAGE = {
   accessKey: "bizflow-e2e",
   bucket: "bizflow-e2e",
   endpoint: "http://127.0.0.1:9000",
@@ -91,12 +91,12 @@ const lines = [
   `SUPABASE_SECRET_KEY=${serviceRoleKey}`,
   "PUBLIC_LINK_SECRET=e2e-public-link-secret-32-characters",
   "",
-  "# MinIO speaks the S3 API that the R2 client already targets.",
+  "# The local gateway speaks the S3 API that the R2 client already targets.",
   "CLOUDFLARE_R2_ACCOUNT_ID=e2e",
-  `CLOUDFLARE_R2_ACCESS_KEY_ID=${MINIO.accessKey}`,
-  `CLOUDFLARE_R2_SECRET_ACCESS_KEY=${MINIO.secretKey}`,
-  `CLOUDFLARE_R2_BUCKET_NAME=${MINIO.bucket}`,
-  `CLOUDFLARE_R2_ENDPOINT=${MINIO.endpoint}`,
+  `CLOUDFLARE_R2_ACCESS_KEY_ID=${STORAGE.accessKey}`,
+  `CLOUDFLARE_R2_SECRET_ACCESS_KEY=${STORAGE.secretKey}`,
+  `CLOUDFLARE_R2_BUCKET_NAME=${STORAGE.bucket}`,
+  `CLOUDFLARE_R2_ENDPOINT=${STORAGE.endpoint}`,
   "CLOUDFLARE_R2_REGION=auto",
   "CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS=900",
   "",

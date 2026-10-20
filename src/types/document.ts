@@ -1,4 +1,5 @@
 import type { ClientFile } from "@/lib/r2/stored-file"
+import type { DocumentSourceKind } from "@/types/template"
 
 export type DocumentVersionStatus = "upload_pending" | "available"
 export type DocumentAccessLevel = "viewer" | "contributor"
@@ -7,6 +8,17 @@ export type DocumentLifecycleState =
   | "archived"
   | "trashed"
   | "purge_pending"
+
+/**
+ * Whether a document opens in the editor: a generated document or a sheet,
+ * while active or archived. Uploads, and anything in Trash, open their page.
+ *
+ * @param document - Its kind and where it stands.
+ * @returns True when its link is the editor's.
+ */
+export function opensInEditor(document: { sourceKind?: DocumentSourceKind | null; lifecycleState: string }): boolean {
+  return (document.sourceKind === "generated" || document.sourceKind === "sheet") && (document.lifecycleState === "active" || document.lifecycleState === "archived")
+}
 
 export type FolderRow = Record<string, unknown> & {
   id: string
@@ -93,7 +105,7 @@ export type DocumentSummary = {
   title: string
   description: string | null
   currentVersionId: string | null
-  sourceKind?: "upload" | "generated"
+  sourceKind?: DocumentSourceKind
   templateId?: string | null
   templateRevision?: number | null
   lifecycleState: DocumentLifecycleState

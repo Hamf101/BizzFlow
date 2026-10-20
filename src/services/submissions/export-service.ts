@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import { formatCsv } from "@/lib/csv"
 import type { ListSort } from "@/lib/list-state"

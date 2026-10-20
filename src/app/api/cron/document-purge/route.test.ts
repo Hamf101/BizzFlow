@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const processDueResourcePurges = vi.hoisted(() => vi.fn())
+const purgeDueTrashedTemplates = vi.hoisted(() => vi.fn())
+const cleanupAbandonedDocumentUploads = vi.hoisted(() => vi.fn())
 
 vi.mock("@/services/document-service", () => ({
+  cleanupAbandonedDocumentUploads,
   processDueResourcePurges,
+}))
+vi.mock("@/services/template-service", () => ({
+  purgeDueTrashedTemplates,
 }))
 
 import { GET } from "./route"
@@ -14,6 +20,8 @@ const originalCronSecret = process.env.CRON_SECRET
 describe("document purge cron route", () => {
   beforeEach(() => {
     processDueResourcePurges.mockReset()
+    purgeDueTrashedTemplates.mockReset().mockResolvedValue(1)
+    cleanupAbandonedDocumentUploads.mockReset().mockResolvedValue({ failed: 0, removed: 4 })
     process.env.CRON_SECRET = CRON_SECRET
   })
 
@@ -72,6 +80,8 @@ describe("document purge cron route", () => {
       retryScheduled: 0,
       permanentlyFailed: 0,
       finalized: 2,
+      templatesPurged: 1,
+      abandonedUploads: { failed: 0, removed: 4 },
     })
     expect(processDueResourcePurges).toHaveBeenCalledOnce()
   })
@@ -93,5 +103,7 @@ describe("document purge cron route", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Document purge failed.",
     })
+    // One failing still lets the other empty its Trash.
+    expect(purgeDueTrashedTemplates).toHaveBeenCalledOnce()
   })
 })

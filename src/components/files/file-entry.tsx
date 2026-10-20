@@ -1,4 +1,4 @@
-import { FileText, Folder } from "lucide-react"
+import { FileSpreadsheet, FileText, Folder, type LucideProps } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement, ReactNode } from "react"
 
@@ -23,7 +23,7 @@ export type FileEntry = {
   /** Where the entry opens: into a folder, or the document itself. */
   href: string
   id: string
-  kind: "document" | "folder" | "upload"
+  kind: "document" | "folder" | "sheet" | "upload"
   /** The entry's actions, where the member may manage it. */
   menu: ReactNode
   modified: ReactNode
@@ -37,12 +37,17 @@ export type FileEntry = {
   type: string
 }
 
+/** The icon for an entry's kind: a folder, a sheet, or a page for the rest. */
+export function EntryIcon({ kind, ...props }: LucideProps & { kind: FileEntry["kind"] }): ReactElement {
+  return kind === "folder" ? <Folder {...props} /> : kind === "sheet" ? <FileSpreadsheet {...props} /> : <FileText {...props} />
+}
+
 /** How large a file is drawn, from a filmstrip frame to the Gallery stage. */
-export type FileArtSize = "film" | "icon" | "preview" | "stage"
+export type FileArtSize = "card" | "film" | "preview" | "stage"
 
 const FOLDER_ART: Record<FileArtSize, string> = {
+  card: "size-[64px] sm:size-[88px]",
   film: "size-10 opacity-75",
-  icon: "size-[60px] sm:size-[74px]",
   preview: "size-[110px]",
   stage: "size-[168px]",
 }
@@ -77,7 +82,7 @@ export function FileArt({
     )
   }
 
-  const large = size === "preview" || size === "stage"
+  const large = size !== "film"
 
   return (
     <span
@@ -90,14 +95,15 @@ export function FileArt({
       data-document-surface="paper"
       data-slot="file-upload-page"
     >
-      <FileText
+      <EntryIcon
         className={cn("text-muted-foreground/50", large ? "size-10" : "size-4")}
+        kind={entry.kind}
         strokeWidth={1.25}
       />
       {entry.extension ? (
         <span
           className={cn(
-            "absolute right-0 bottom-0 rounded-tl-[3px] bg-primary px-1 font-mono font-semibold tracking-[0.05em] text-primary-foreground",
+            "absolute right-0 bottom-0 rounded-tl-xs bg-primary px-1 font-mono font-semibold tracking-[0.05em] text-primary-foreground",
             large ? "text-[11px] leading-5" : "text-[8px] leading-[1.4]"
           )}
         >
@@ -209,7 +215,7 @@ export function FileDetails({
       </dl>
       <div className="flex items-center gap-1.5">
         <Link
-          className={cn(buttonVariants({ size: "sm", variant: "outline" }), "rounded-[9px]")}
+          className={cn(buttonVariants({ size: "sm", variant: "outline" }), "rounded-sm")}
           href={entry.href}
         >
           Open

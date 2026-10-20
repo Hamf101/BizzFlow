@@ -17,6 +17,7 @@ import {
 } from "@/services/organization-service"
 import {
   seedSampleSubmissionsForOrganization,
+  BUSINESS_KINDS,
   seedStarterTemplatesForOrganization,
 } from "@/services/templates/starter-templates"
 import { profileSchema } from "@/types/profile"
@@ -86,12 +87,16 @@ export async function createOrganizationAction(formData: FormData): Promise<void
  *
  * @returns Never returns; redirects to the dashboard with status.
  */
-export async function seedStarterTemplatesAction(): Promise<void> {
+export async function seedStarterTemplatesAction(formData: FormData): Promise<void> {
+  // The kind of business the owner chose picks the pack; anything else, the default.
+  const chosen = String(formData.get("businessKind") ?? "")
+  const businessKind = BUSINESS_KINDS.find((kind) => kind.id === chosen)?.id
+
   await runSeedAction(
     "seed_starter_templates_action",
     "Create an organization before adding starter templates.",
     "starter_content_added",
-    seedStarterTemplatesForOrganization,
+    (actor) => seedStarterTemplatesForOrganization({ ...actor, businessKind }),
     "/templates"
   )
 }

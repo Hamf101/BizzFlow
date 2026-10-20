@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import { canPerformOrganizationAction, isOrganizationRole, type OrganizationRole } from "@/lib/permissions"
 import { createSecureToken, hashToken, TOKEN_LIFETIME_MS } from "@/services/document-signing/token-security"
@@ -94,7 +94,7 @@ type Target = {
   inherit: boolean
   name: string
   parentId: string | null
-  /** A document's: made here ("generated") or uploaded. */
+  /** A document's: made here ("generated"), a sheet, or uploaded. */
   sourceKind: string | null
 }
 
@@ -528,7 +528,7 @@ async function buildView(
 function outsideLevels(resource: SharingResource, target: Target): SharingLevel[] {
   if (resource.kind !== "document") return []
 
-  return target.sourceKind === "generated" ? ["viewer", "contributor"] : ["viewer"]
+  return target.sourceKind === "generated" || target.sourceKind === "sheet" ? ["viewer", "contributor"] : ["viewer"]
 }
 
 const emailSchema = z.email().max(320)

@@ -15,7 +15,6 @@ import { listDocumentTemplates } from "@/services/template-service"
 import type { DocumentFolder } from "@/types/document"
 import type { DocumentTemplate } from "@/types/template"
 
-import { createGeneratedDocumentAction } from "../actions"
 import type { Metadata } from "next"
 
 type NewDocumentSearchParams = Promise<{
@@ -112,7 +111,6 @@ export default async function NewDocumentPage({
         <h1 className="text-2xl font-semibold tracking-normal">Add document</h1>
       </div>
       <AddDocument
-        createAction={createGeneratedDocumentAction}
         folderId={activeFolder?.id ?? null}
         organizationId={context.organization.id}
         templates={publishedTemplates.map((template: DocumentTemplate) => ({

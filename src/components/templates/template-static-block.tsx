@@ -23,7 +23,40 @@ type StaticTemplateBlock = Extract<
 type TemplateStaticBlockProps = {
   accentColorVariable: string
   block: StaticTemplateBlock
+  /** A numbered list's markers from the render plan, such as "3.1" and "(a)". */
+  listMarkers?: readonly string[] | null
   primaryColorVariable: string
+}
+
+type ListBlock = Extract<TemplateBlock, { type: "bullet_list" | "numbered_list" }>
+
+// A bullet a level down is hollow, and below that square, as in a word processor.
+const BULLETS = ["•", "◦", "▪"] as const
+
+/**
+ * What a list item is marked with: its number from the render plan, such as
+ * "3.1" or "(a)", or a bullet for its level.
+ *
+ * @param block - The list.
+ * @param index - The item.
+ * @param markers - The render plan's markers for a numbered list.
+ * @returns The marker.
+ */
+export function listItemMarker(block: ListBlock, index: number, markers?: readonly string[] | null): string {
+  return block.type === "bullet_list" ? BULLETS[Math.min(block.levels?.[index] ?? 0, BULLETS.length - 1)]! : (markers?.[index] ?? `${index + 1}.`)
+}
+
+/**
+ * How far a list item is set in, a level at a time.
+ *
+ * @param block - The list.
+ * @param index - The item.
+ * @returns Its left padding.
+ */
+export function listItemIndent(block: ListBlock, index: number): string | undefined {
+  const level = block.levels?.[index] ?? 0
+
+  return level ? `${level * 1.5}em` : undefined
 }
 
 /**
@@ -55,6 +88,7 @@ export function isStaticTemplateBlock(
 export function TemplateStaticBlock({
   accentColorVariable,
   block,
+  listMarkers,
   primaryColorVariable,
 }: TemplateStaticBlockProps): ReactElement | null {
   switch (block.type) {
@@ -75,25 +109,23 @@ export function TemplateStaticBlock({
         </p>
       )
     case "bullet_list":
+    case "numbered_list": {
+      const List = block.type === "bullet_list" ? "ul" : "ol"
+
+      // Marked by the plan, not the browser, so 3.1 and (a) read as the PDF prints them.
       return (
-        <ul className="list-disc space-y-1 pl-5 text-sm leading-[var(--doc-line-height,1.5rem)]">
+        <List className="grid list-none gap-1 text-sm leading-[var(--doc-line-height,1.5rem)]">
           {block.items.map((item: string, index: number) => (
-            <li key={`${block.id}-${index}`}>
-              <RichText runs={block.itemRuns?.[index]} text={item} />
+            <li className="flex gap-2" key={`${block.id}-${index}`} style={{ paddingLeft: listItemIndent(block, index) }}>
+              <span className="min-w-[1.25em] shrink-0 tabular-nums">{listItemMarker(block, index, listMarkers)}</span>
+              <span className="min-w-0">
+                <RichText runs={block.itemRuns?.[index]} text={item} />
+              </span>
             </li>
           ))}
-        </ul>
+        </List>
       )
-    case "numbered_list":
-      return (
-        <ol className="list-decimal space-y-1 pl-5 text-sm leading-[var(--doc-line-height,1.5rem)]">
-          {block.items.map((item: string, index: number) => (
-            <li key={`${block.id}-${index}`}>
-              <RichText runs={block.itemRuns?.[index]} text={item} />
-            </li>
-          ))}
-        </ol>
-      )
+    }
     case "image": {
       // A picture placed on a page is drawn over it, not in the text.
       if (block.placement) {

@@ -25,9 +25,10 @@ export const TEMPLATE_FLOW_OPERATION_TYPES = [
  * parses those strings and validates them against canonical operation and
  * template schemas before applying any document edit.
  *
+ * @param options - `sourceAnswers`: a form is attached, so the answers written on it come back too.
  * @returns Provider-neutral JSON Schema for the Flow response envelope.
  */
-export function createTemplateFlowResponseSchema(): FlowJsonSchema {
+export function createTemplateFlowResponseSchema(options: { sourceAnswers?: boolean } = {}): FlowJsonSchema {
   return createClosedObjectSchema({
     assistantMessage: {
       type: "string",
@@ -44,6 +45,15 @@ export function createTemplateFlowResponseSchema(): FlowJsonSchema {
       description:
         "Clarification question when confirmation is needed; otherwise an empty string.",
     },
+    ...(options.sourceAnswers
+      ? {
+          sourceAnswersJson: {
+            type: "string",
+            description:
+              "A compact JSON-encoded object of the answers written on the attached form, keyed by field key; {} when it is blank.",
+          },
+        }
+      : {}),
     // Shape only: strict modes on several providers reject size limits, so
     // Flow's own validation enforces how many operations a turn may carry.
     operations: {

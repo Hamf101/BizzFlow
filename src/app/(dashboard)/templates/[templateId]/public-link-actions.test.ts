@@ -93,6 +93,7 @@ describe("public form link actions", () => {
       createPublicFormLinkAction(
         createFormData({
           expiresAt: "2026-12-31T12:00:00.000Z",
+          label: "Front desk",
           maxSubmissions: "12",
           templateId: TEMPLATE_ID,
         })
@@ -103,6 +104,7 @@ describe("public form link actions", () => {
       organizationId: ORGANIZATION_ID,
       templateId: TEMPLATE_ID,
       expiresAt: "2026-12-31T12:00:00.000Z",
+      label: "Front desk",
       maxSubmissions: 12,
     })
     expect(revalidatePathMock).toHaveBeenCalledExactlyOnceWith(LINKS_PATH)

@@ -36,7 +36,7 @@ export function DashboardRouteError({
 
   return (
     <div className="grid max-w-3xl gap-4">
-      <span className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+      <span className="text-xs text-muted-foreground">
         {routeName}
       </span>
       <ErrorState

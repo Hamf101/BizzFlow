@@ -32,7 +32,7 @@ export function MobileTopBar({
     <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border bg-canvas/95 px-4 py-2 backdrop-blur-sm md:hidden">
       <Link
         aria-label="BizFlow dashboard"
-        className="inline-flex min-h-11 min-w-11 shrink-0 items-center rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="inline-flex min-h-11 min-w-11 shrink-0 items-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         href="/dashboard"
       >
         <BizFlowWordmark compact />

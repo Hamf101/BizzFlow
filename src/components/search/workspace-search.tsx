@@ -260,7 +260,7 @@ export function WorkspaceSearch({ role }: { role: OrganizationPermissionSubject 
           className={cn(
             // On a phone, across the top where the keyboard never covers it;
             // wider, wherever it was left (see Place).
-            "fixed top-[max(env(safe-area-inset-top),0.75rem)] left-1/2 z-50 flex w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-[22px] outline-none md:top-[var(--search-top)] md:bottom-[var(--search-bottom)] md:left-[calc(50%_+_var(--search-x))] md:w-[min(46rem,calc(100vw-4rem))] md:[transform:translate(var(--carried-x),var(--carried-y))]",
+            "fixed top-[max(env(safe-area-inset-top),0.75rem)] left-1/2 z-50 flex w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-xl outline-none md:top-[var(--search-top)] md:bottom-[var(--search-bottom)] md:left-[calc(50%_+_var(--search-x))] md:w-[min(46rem,calc(100vw-4rem))] md:[transform:translate(var(--carried-x),var(--carried-y))]",
             // Glass: the page shows through, blurred, as Spotlight's does.
             "border border-foreground/10 bg-popover/60 text-popover-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_30px_90px_-24px_rgb(0_0_0/0.38)] backdrop-blur-[30px] backdrop-saturate-[1.7]",
             "origin-top transition-[opacity,scale] duration-150 ease-out data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 motion-reduce:transition-none",
@@ -306,12 +306,11 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
     return itemKind ? [{ href: item.href, kind: itemKind, label: item.label }] : []
   })
   const section = sections.find((each) => each.kind === kind)
-  // Two letters make a search; before that, a chosen section opens its own
-  // list, as a Spotlight category does.
-  const asked = words.length >= 2 ? words : ""
+  // The first letter makes a search. Before any, the panel shows what the
+  // member had lately, or a chosen section's own list, as Spotlight does.
+  const asked = words
   const opening = !asked && section !== undefined
-  const current =
-    found && (asked ? found.words === asked : opening && found.words === "" && found.kind === kind) ? found : null
+  const current = found && found.words === asked && (asked !== "" || found.kind === kind) ? found : null
   // Narrowing shows at once what is already here, while the rest arrives.
   const hits = current
     ? current.result.hits.filter((hit) => !section || hit.kind === section.kind).sort(
@@ -338,10 +337,6 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
   const chosen = options[Math.min(active, options.length - 1)]
 
   useEffect(() => {
-    if (!asked && !kind) {
-      return undefined
-    }
-
     const params = new URLSearchParams()
 
     if (kind) {
@@ -405,8 +400,9 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
     }
   }
 
-  // Counts are of what the words found.
-  const counted = asked ? current : null
+  // Counts are of what the words found. One letter looks only through what
+  // was opened lately, so it counts nothing it could claim as a total.
+  const counted = asked.length > 1 ? current : null
   const every = counted ? Object.values(counted.result.totals).reduce((sum, count) => sum + (count ?? 0), 0) : undefined
   const filters = [{ count: every, kind: null, label: "All" }, ...sections.map((each) => ({ count: counted?.result.totals[each.kind], kind: each.kind, label: each.label }))]
 
@@ -436,7 +432,7 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
           />
           <DialogPrimitive.Close
             aria-label="Close search"
-            className="rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40 max-md:-mr-2.5 max-md:grid max-md:size-11 max-md:place-items-center"
+            className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40 max-md:-mr-2.5 max-md:grid max-md:size-11 max-md:place-items-center"
           >
             {/* A phone has no Escape key to hint at: a cross it can reach instead. */}
             <Key className="max-md:hidden">esc</Key>
@@ -466,69 +462,70 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
         </div>
       </div>
 
-      {asked || opening ? (
-        <div className="grid md:h-[26rem] md:grid-cols-2">
-          <div
-            aria-label="Results"
-            className="max-h-[min(26rem,55dvh)] overflow-y-auto p-2 md:max-h-none md:border-r md:border-foreground/[0.08]"
-            id={listId}
-            role="listbox"
-          >
-            {options.length > 0 ? (
-              options.map((option, index) => (
-                <Fragment key={option.key}>
-                  {option.hit && (opening ? index === 0 : !section && option.hit.kind !== options[index - 1]?.hit?.kind) ? (
-                    <div
-                      aria-hidden="true"
-                      className="px-2.5 pt-3 pb-1 text-[10px] font-semibold tracking-[0.16em] text-primary uppercase first:pt-1.5"
-                    >
-                      {opening && section ? OPENING[section.kind] : sections.find((each) => each.kind === option.hit?.kind)?.label}
-                    </div>
-                  ) : null}
-                  <Link
-                    aria-selected={option === chosen}
-                    className={cn(
-                      "flex min-h-11 items-center gap-3 rounded-[12px] px-2.5 py-2 outline-none",
-                      option === chosen && "bg-primary/15"
-                    )}
-                    href={option.href}
-                    id={`${listId}-${index}`}
-                    onClick={() => searchHandle.close()}
-                    onMouseMove={() => setActive(index)}
-                    role="option"
-                    tabIndex={-1}
+      {/* Always: before any words it shows what the member had lately. */}
+      <div className="grid md:h-[26rem] md:grid-cols-2">
+        <div
+          aria-label="Results"
+          className="max-h-[min(26rem,55dvh)] overflow-y-auto p-2 md:max-h-none md:border-r md:border-foreground/[0.08]"
+          id={listId}
+          role="listbox"
+        >
+          {options.length > 0 ? (
+            options.map((option, index) => (
+              <Fragment key={option.key}>
+                {option.hit && (opening ? index === 0 : !section && option.hit.kind !== options[index - 1]?.hit?.kind) ? (
+                  <div
+                    aria-hidden="true"
+                    className="px-2.5 pt-3 pb-1 text-xs font-medium text-primary first:pt-1.5"
                   >
-                    {option.hit ? (
-                      <HitRow hit={option.hit} />
-                    ) : (
-                      <span className="flex-1 px-0.5 text-[13px] text-primary">
-                        {opening ? `Go to ${section?.label} →` : `Show all ${total} in ${section?.label} →`}
-                      </span>
-                    )}
-                    {option === chosen ? (
-                      <CornerDownLeft aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
-                    ) : null}
-                  </Link>
-                </Fragment>
-              ))
-            ) : (
-              <p className="px-3 py-6 text-sm text-muted-foreground" role="status">
-                {failure ??
-                  (current
-                    ? section && sectionFailed
-                      ? `${section.label} could not be searched. Try again.`
-                      : failedLabels
-                        ? `Nothing matches “${current.words}” (${failedLabels} could not be searched).`
-                        : `Nothing${section ? ` in ${section.label}` : ""} matches “${current.words}”.`
-                    : "Searching…")}
-              </p>
-            )}
-          </div>
-          <div className="hidden overflow-y-auto md:block">
-            {chosen?.hit ? <Preview hit={chosen.hit} key={chosen.key} onOpen={go} /> : null}
-          </div>
+                    {opening && section ? OPENING[section.kind] : sections.find((each) => each.kind === option.hit?.kind)?.label}
+                  </div>
+                ) : null}
+                <Link
+                  aria-selected={option === chosen}
+                  className={cn(
+                    "flex min-h-11 items-center gap-3 rounded-lg px-2.5 py-2 outline-none",
+                    option === chosen && "bg-primary/15"
+                  )}
+                  href={option.href}
+                  id={`${listId}-${index}`}
+                  onClick={() => searchHandle.close()}
+                  onMouseMove={() => setActive(index)}
+                  role="option"
+                  tabIndex={-1}
+                >
+                  {option.hit ? (
+                    <HitRow hit={option.hit} />
+                  ) : (
+                    <span className="flex-1 px-0.5 text-[13px] text-primary">
+                      {opening ? `Go to ${section?.label} →` : counted ? `Show all ${total} in ${section?.label} →` : `Show all in ${section?.label} →`}
+                    </span>
+                  )}
+                  {option === chosen ? (
+                    <CornerDownLeft aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+                  ) : null}
+                </Link>
+              </Fragment>
+            ))
+          ) : (
+            <p className="px-3 py-6 text-sm text-muted-foreground" role="status">
+              {failure ??
+                (current
+                  ? section && sectionFailed
+                    ? `${section.label} could not be searched. Try again.`
+                    : failedLabels
+                      ? `Nothing matches “${current.words}” (${failedLabels} could not be searched).`
+                      : current.words
+                        ? `Nothing${section ? ` in ${section.label}` : ""} matches “${current.words}”.`
+                        : "Nothing yet. What you open will show here."
+                  : "Searching…")}
+            </p>
+          )}
         </div>
-      ) : null}
+        <div className="hidden overflow-y-auto md:block">
+          {chosen?.hit ? <Preview hit={chosen.hit} key={chosen.key} onOpen={go} /> : null}
+        </div>
+      </div>
 
       <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs text-muted-foreground md:px-5">
         <span>Only what you can open</span>
@@ -605,7 +602,7 @@ function Tile({ icon: Icon, large = false }: { icon: LucideIcon; large?: boolean
     <span
       className={cn(
         "grid shrink-0 place-items-center bg-primary/12 text-primary",
-        large ? "size-13 rounded-[14px]" : "size-8 rounded-[9px]"
+        large ? "size-13 rounded-lg" : "size-8 rounded-sm"
       )}
     >
       <Icon aria-hidden="true" className={large ? "size-6" : "size-4"} />
@@ -617,7 +614,7 @@ function Key({ children, className }: { children: ReactNode; className?: string 
   return (
     <kbd
       className={cn(
-        "rounded-[6px] border border-foreground/15 bg-foreground/[0.04] px-1.5 py-1 font-sans text-[11px] leading-none font-medium whitespace-nowrap text-foreground/70",
+        "rounded-sm border border-foreground/15 bg-foreground/[0.04] px-1.5 py-1 font-sans text-[11px] leading-none font-medium whitespace-nowrap text-foreground/70",
         className
       )}
     >
@@ -722,7 +719,7 @@ function present(hit: WorkspaceSearchHit): Shown {
         copy: link(href),
         description: item.description,
         facts: [
-          ["Kind", item.sourceKind === "generated" ? "Document" : "Uploaded file"],
+          ["Kind", item.sourceKind === "generated" ? "Document" : item.sourceKind === "sheet" ? "Sheet" : "Uploaded file"],
           ["Created", formatMediumDate(item.createdAt)],
           ["Edited", formatMediumDate(item.updatedAt)],
         ],

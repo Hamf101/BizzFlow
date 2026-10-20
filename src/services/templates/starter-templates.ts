@@ -20,8 +20,20 @@ export type StarterSampleSubmission = {
   values: Record<string, unknown>
 }
 
+/** The kinds of business a new owner chooses from, so their starters fit. */
+export const BUSINESS_KINDS = [
+  { id: "field", label: "Trades & field work" },
+  { id: "office", label: "Office & services" },
+  { id: "shop", label: "Shops, food & hospitality" },
+  { id: "care", label: "Care & health" },
+] as const
+
+export type BusinessKind = (typeof BUSINESS_KINDS)[number]["id"]
+
 export type StarterTemplateDefinition = {
   title: string
+  /** The kinds of business it suits. */
+  kinds: readonly BusinessKind[]
   description: string
   category: "Safety" | "Operations" | "Admin" | "Finance"
   content: TemplateContentV3
@@ -36,6 +48,7 @@ export type StarterTemplateDefinition = {
 export const STARTER_TEMPLATES: StarterTemplateDefinition[] = [
   {
     title: "Incident & Safety Report",
+    kinds: ["field", "shop", "care"],
     description: "Standard report form for documenting workplace incidents, hazards, and corrective actions.",
     category: "Safety",
     content: templateContentV3Schema.parse({
@@ -124,6 +137,7 @@ export const STARTER_TEMPLATES: StarterTemplateDefinition[] = [
   },
   {
     title: "Equipment & Facility Inspection",
+    kinds: ["field", "shop"],
     description: "Routine maintenance and safety check sheet for machinery and physical facilities.",
     category: "Operations",
     content: templateContentV3Schema.parse({
@@ -201,6 +215,7 @@ export const STARTER_TEMPLATES: StarterTemplateDefinition[] = [
   },
   {
     title: "Expense & Purchase Request",
+    kinds: ["field", "office", "shop", "care"],
     description: "Formal approval form for business expenses, software subscriptions, or supply orders.",
     category: "Finance",
     content: templateContentV3Schema.parse({
@@ -256,6 +271,245 @@ export const STARTER_TEMPLATES: StarterTemplateDefinition[] = [
       },
     ],
   },
+  {
+    title: "Client Intake",
+    kinds: ["office", "care"],
+    description: "Collects a new client's details, what they need, and how to reach them.",
+    category: "Admin",
+    content: templateContentV3Schema.parse({
+      schemaVersion: 3,
+      branding: {
+        organizationName: "BizFlow",
+        logoDataUrl: null,
+        logoAlignment: "left",
+        logoWidthPercent: 30,
+        primaryColor: "#0f172a",
+        accentColor: "#9333ea",
+      },
+      blocks: [
+        {
+          id: "40000000-0000-4000-8000-000000000001",
+          type: "heading",
+          text: "About the client",
+          level: 2,
+          alignment: "left",
+        },
+        {
+          id: "40000000-0000-4000-8000-000000000002",
+          type: "text_field",
+          fieldKey: "client_name",
+          label: "Full name or business name",
+          required: true,
+          multiline: false,
+          placeholder: null,
+          helpText: null,
+        },
+        {
+          id: "40000000-0000-4000-8000-000000000003",
+          type: "text_field",
+          fieldKey: "client_contact",
+          label: "Email or phone",
+          required: true,
+          multiline: false,
+          placeholder: null,
+          helpText: null,
+        },
+        {
+          id: "40000000-0000-4000-8000-000000000004",
+          type: "text_field",
+          fieldKey: "client_need",
+          label: "What they need from us",
+          required: true,
+          multiline: true,
+          placeholder: null,
+          helpText: null,
+        },
+        {
+          id: "40000000-0000-4000-8000-000000000005",
+          type: "date_field",
+          fieldKey: "first_contact_date",
+          label: "First contact",
+          required: true,
+          helpText: null,
+        },
+      ],
+      sections: [],
+      fieldGroups: [],
+      blockRules: [],
+    }),
+    sampleSubmissions: [
+      {
+        title: "Sample: new bookkeeping client",
+        values: {
+          client_name: "Harbor Street Bakery",
+          client_contact: "owner@harborbakery.example",
+          client_need: "Monthly bookkeeping and a year-end tidy-up.",
+          first_contact_date: "2026-10-01",
+        },
+      },
+    ],
+  },
+  {
+    title: "Time Off Request",
+    kinds: ["office", "shop", "care"],
+    description: "A request for leave with the dates, sent to a manager to approve.",
+    category: "Admin",
+    content: templateContentV3Schema.parse({
+      schemaVersion: 3,
+      branding: {
+        organizationName: "BizFlow",
+        logoDataUrl: null,
+        logoAlignment: "left",
+        logoWidthPercent: 30,
+        primaryColor: "#0f172a",
+        accentColor: "#9333ea",
+      },
+      blocks: [
+        {
+          id: "50000000-0000-4000-8000-000000000001",
+          type: "heading",
+          text: "Time off",
+          level: 2,
+          alignment: "left",
+        },
+        {
+          id: "50000000-0000-4000-8000-000000000002",
+          type: "date_field",
+          fieldKey: "leave_start",
+          label: "First day off",
+          required: true,
+          helpText: null,
+        },
+        {
+          id: "50000000-0000-4000-8000-000000000003",
+          type: "date_field",
+          fieldKey: "leave_end",
+          label: "Last day off",
+          required: true,
+          helpText: null,
+        },
+        {
+          id: "50000000-0000-4000-8000-000000000004",
+          type: "text_field",
+          fieldKey: "leave_reason",
+          label: "Reason (optional)",
+          required: false,
+          multiline: true,
+          placeholder: null,
+          helpText: null,
+        },
+        {
+          id: "50000000-0000-4000-8000-000000000005",
+          type: "checkbox_field",
+          fieldKey: "cover_arranged",
+          label: "I have arranged cover for my shifts",
+          required: false,
+          checkedByDefault: false,
+          helpText: null,
+        },
+      ],
+      sections: [],
+      fieldGroups: [],
+      blockRules: [],
+    }),
+    sampleSubmissions: [
+      {
+        title: "Sample: long weekend",
+        values: {
+          leave_start: "2026-11-06",
+          leave_end: "2026-11-09",
+          leave_reason: "Family visit.",
+          cover_arranged: true,
+        },
+      },
+    ],
+  },
+  {
+    title: "Opening & Closing Checklist",
+    kinds: ["shop"],
+    description: "The daily checks before opening and after closing, signed off by whoever ran them.",
+    category: "Operations",
+    content: templateContentV3Schema.parse({
+      schemaVersion: 3,
+      branding: {
+        organizationName: "BizFlow",
+        logoDataUrl: null,
+        logoAlignment: "left",
+        logoWidthPercent: 30,
+        primaryColor: "#0f172a",
+        accentColor: "#9333ea",
+      },
+      blocks: [
+        {
+          id: "60000000-0000-4000-8000-000000000001",
+          type: "heading",
+          text: "Today's checks",
+          level: 2,
+          alignment: "left",
+        },
+        {
+          id: "60000000-0000-4000-8000-000000000002",
+          type: "date_field",
+          fieldKey: "check_date",
+          label: "Date",
+          required: true,
+          helpText: null,
+        },
+        {
+          id: "60000000-0000-4000-8000-000000000003",
+          type: "checkbox_field",
+          fieldKey: "tills_counted",
+          label: "Tills counted and recorded",
+          required: false,
+          checkedByDefault: false,
+          helpText: null,
+        },
+        {
+          id: "60000000-0000-4000-8000-000000000004",
+          type: "checkbox_field",
+          fieldKey: "fridges_in_range",
+          label: "Fridge and freezer temperatures in range",
+          required: false,
+          checkedByDefault: false,
+          helpText: null,
+        },
+        {
+          id: "60000000-0000-4000-8000-000000000005",
+          type: "checkbox_field",
+          fieldKey: "doors_secured",
+          label: "Doors, windows and alarm secured",
+          required: false,
+          checkedByDefault: false,
+          helpText: null,
+        },
+        {
+          id: "60000000-0000-4000-8000-000000000006",
+          type: "text_field",
+          fieldKey: "check_notes",
+          label: "Anything to hand over",
+          required: false,
+          multiline: true,
+          placeholder: null,
+          helpText: null,
+        },
+      ],
+      sections: [],
+      fieldGroups: [],
+      blockRules: [],
+    }),
+    sampleSubmissions: [
+      {
+        title: "Sample: Saturday close",
+        values: {
+          check_date: "2026-10-10",
+          tills_counted: true,
+          fridges_in_range: true,
+          doors_secured: true,
+          check_notes: "Walk-in freezer door sticks; reported.",
+        },
+      },
+    ],
+  },
 ]
 
 /** Outcome of one starter-template seeding pass. */
@@ -280,7 +534,7 @@ export type SeedStarterTemplatesResult = {
  * @throws TemplateServiceError when access or persistence fails.
  */
 export async function seedStarterTemplatesForOrganization(
-  input: { actorUserId: string; organizationId: string },
+  input: { actorUserId: string; businessKind?: BusinessKind; organizationId: string },
   deps: TemplateServiceDeps = {}
 ): Promise<SeedStarterTemplatesResult> {
   return runTemplateOperation(
@@ -303,12 +557,17 @@ export async function seedStarterTemplatesForOrganization(
       let seededCount = 0
       let skippedCount = 0
 
-      for (const starter of STARTER_TEMPLATES) {
+      // The owner's kind of business picks the pack; unanswered, the field pack.
+      const kind = input.businessKind ?? "field"
+
+      for (const starter of STARTER_TEMPLATES.filter((template) => template.kinds.includes(kind))) {
         const { data: existing, error: lookupError } = await client
           .from("document_templates")
           .select("id")
           .eq("org_id", input.organizationId)
           .eq("title", starter.title)
+          // One in Trash is on its way out, so the starter comes back.
+          .is("trashed_at", null)
           // Titles are not unique; any one is enough to skip.
           .limit(1)
 

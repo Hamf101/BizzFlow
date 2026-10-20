@@ -33,6 +33,7 @@ const actions: FilesWorkspaceActions = {
   archiveDocument: formAction,
   archiveFolder: formAction,
   createFolder: formAction,
+  createSheet: async () => {},
   requestDocumentPurge: formAction,
   requestFolderPurge: formAction,
   restoreDocument: formAction,
@@ -194,11 +195,11 @@ describe("FilesWorkspace", () => {
       "Welcome pack",
       "Zoning letter",
     ])
-    // Folders open in place; a generated document opens as a preview.
+    // Folders open in place; a generated document opens in the editor, an upload on its page.
     expect(readNames("href")).toEqual([
       `/documents?folderId=${CONTRACTS_ID}`,
       `/documents?folderId=${LEASES_ID}`,
-      `/documents/${WELCOME_ID}/preview`,
+      `/documents/${WELCOME_ID}/edit`,
       `/documents/${ZONING_ID}`,
     ])
 
@@ -253,6 +254,14 @@ describe("FilesWorkspace", () => {
 
     expect(readActionTargets()).toEqual([])
     expect(hasNewButton()).toBe(false)
+
+    // An uploaded form opens in Flow only for someone who may start the template it becomes.
+    const pdf: DocumentCard = { content: null, contentType: "application/pdf", id: zoning.id, workflowStatus: null }
+    renderWorkspace({ cards: [pdf], documents: [{ ...zoning, accessLevel: "viewer" }], folders: [], membership: { customPermissions: ["documents:view"], role: "staff" } })
+    expect(readActionTargets()).toEqual([])
+
+    renderWorkspace({ cards: [pdf], documents: [{ ...zoning, accessLevel: "viewer" }], folders: [], membership: { customPermissions: ["documents:view", "templates:create"], role: "staff" } })
+    expect(readActionTargets()).toEqual([zoning.title])
   })
 
   it("adds new files only among active files the member may add to", () => {

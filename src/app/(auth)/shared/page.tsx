@@ -10,7 +10,7 @@ import { listGuestDocuments } from "@/services/document-service"
 
 export const metadata: Metadata = { title: "Shared with you" }
 
-const LINK = "text-sm font-medium text-primary underline-offset-4 hover:underline"
+const LINK = "-my-3 inline-block py-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
 
 /**
  * Home for someone given documents from outside a workspace: each document
@@ -46,7 +46,7 @@ export default async function SharedWithYouPage(): Promise<ReactElement> {
             <li key={document.documentId}>
               <Link
                 className="flex min-h-14 items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                href={`/documents/${encodeURIComponent(document.documentId)}/preview`}
+                href={`/documents/${encodeURIComponent(document.documentId)}/edit`}
               >
                 <FileText aria-hidden className="size-5 shrink-0 text-muted-foreground" />
                 <span className="flex min-w-0 flex-1 flex-col">

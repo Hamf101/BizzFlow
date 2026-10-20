@@ -150,7 +150,7 @@ export function EditorImage({ actions, block, placed = false }: { actions: Canva
       {selected && (placed || !block.placement) ? (
         <span
           aria-hidden="true"
-          className="absolute -right-1.5 -bottom-1.5 size-3.5 cursor-nwse-resize touch-none rounded-[3px] border-2 border-primary bg-card"
+          className="absolute -right-1.5 -bottom-1.5 size-3.5 cursor-nwse-resize touch-none rounded-xs border-2 border-primary bg-card"
           onPointerCancel={end}
           onPointerDown={(event) => {
             drag.current = start(event)

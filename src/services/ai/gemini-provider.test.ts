@@ -97,6 +97,31 @@ describe("Gemini AI provider", () => {
     })
   })
 
+  it("sends attached files inline, before the prompt, as the Interactions API's own parts", async () => {
+    const executeInteraction = vi.fn<GeminiInteractionExecutor>(async () => ({
+      id: "interaction-trace-3",
+      model: "gemini-3.6-flash",
+      output_text: '{"result":"ok"}',
+      status: "completed",
+      usage: undefined,
+    }))
+    const provider = new GeminiAiProvider({ apiKey: "test-key", timeoutMs: 12_000, executeInteraction })
+
+    await provider.generateStructured({
+      ...createRequest(),
+      attachments: [
+        { kind: "document", mimeType: "application/pdf", data: new TextEncoder().encode("%PDF-1.7") },
+        { kind: "image", mimeType: "image/png", data: Uint8Array.of(137, 80, 78, 71) },
+      ],
+    })
+
+    expect(executeInteraction.mock.calls[0]?.[0].input).toEqual([
+      { type: "document", data: "JVBERi0xLjc=", mime_type: "application/pdf" },
+      { type: "image", data: "iVBORw==", mime_type: "image/png", resolution: "medium" },
+      { type: "text", text: '{"request":"create an agreement"}' },
+    ])
+  })
+
   it("uses only the exact requested model when it is unavailable", async () => {
     const executeInteraction = vi.fn<GeminiInteractionExecutor>(
       async () => {

@@ -243,6 +243,14 @@ export type FoldLoops = {
   stop: () => void
 }
 
+function idle(task: () => void): void {
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(task, { timeout: 1_000 })
+  } else {
+    task()
+  }
+}
+
 /**
  * Every few seconds, lets the page unfurl and drift for 10 to 15 seconds
  * before it folds back together, until stopped.
@@ -255,10 +263,15 @@ export function playFoldLoops(figure: SVGGraphicsElement, pieces: readonly FoldP
   let running: Animation[] = []
   let scale = 1
   let timer = 0
+  let stopped = false
   const rest = (): void => {
-    timer = window.setTimeout(play, 5_000 + Math.random() * 3_000)
+    // Building a loop's animations is a burst of work: it waits for a quiet moment,
+    // so it never lands on a frame the pointer is moving through.
+    timer = window.setTimeout(() => idle(play), 5_000 + Math.random() * 3_000)
   }
   const play = (): void => {
+    if (stopped) return
+
     const toScreen = figure.getScreenCTM()
 
     if (!toScreen) {
@@ -292,6 +305,7 @@ export function playFoldLoops(figure: SVGGraphicsElement, pieces: readonly FoldP
       return Promise.all(running.map((animation) => animation.finished)).then(rest, () => undefined)
     },
     stop() {
+      stopped = true
       clearTimeout(timer)
       running.forEach((animation) => animation.cancel())
     },

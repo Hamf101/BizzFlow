@@ -454,7 +454,7 @@ function TaskRemindersPanel({
           <ul className="flex flex-col gap-2">
             {reminders.map((reminder: TaskReminder) => (
               <li
-                className="flex flex-wrap items-start justify-between gap-2 rounded-[8px] border border-border bg-muted/30 px-3 py-2"
+                className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-border bg-muted/30 px-3 py-2"
                 key={reminder.id}
               >
                 <div className="flex min-w-0 flex-col gap-1">

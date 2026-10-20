@@ -9,7 +9,7 @@ const usesHttps =
 
 // Sentry needs no connect-src entry because browser events tunnel through the
 // same-origin /monitoring route. Browser uploads need the configured R2 origin
-// exactly, including the local MinIO origin used by the end-to-end suite.
+// exactly, including the local storage origin used by the end-to-end suite.
 const contentSecurityPolicy = buildContentSecurityPolicy({
   appUrl: process.env.NEXT_PUBLIC_APP_URL,
   isProduction,
@@ -43,6 +43,9 @@ const securityHeaders: Array<{ key: string; value: string }> = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // `pnpm check` and CI type-check every file before they build, so their
+  // build skips repeating it; Vercel's build (no flag) still type-checks.
+  typescript: { ignoreBuildErrors: process.env.BUILD_SKIP_TYPECHECK === "1" },
   // Yjs warns "already imported" when the server bundles it once for route
   // handlers and again for rendering; a shared copy keeps its class checks true.
   serverExternalPackages: ["yjs"],

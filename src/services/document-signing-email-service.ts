@@ -94,3 +94,139 @@ function createSigningDeliveryReference(
 
   return `document-signing/${input.documentId}/${input.recipientId}/${tokenDigest}`
 }
+
+/** One signer whose link stopped working when the sender took the document back to edit. */
+export type SendDocumentSigningCancelledEmailInput = Omit<SendDocumentSigningEmailInput, "token"> & {
+  /** When the cancelled round began, so a second cancel is a second email. */
+  revokedAt: string
+  signed: boolean
+}
+
+/**
+ * Tells a signer the document they were sent is being changed, so their link
+ * no longer works; one who signed learns their signature no longer counts.
+ *
+ * @param input - Document, organization, signer, and whether they had signed.
+ * @param deps - Optional email transport dependency for tests.
+ * @returns Resolves after EmailJS accepts the email.
+ * @throws DocumentSigningEmailServiceError when configuration or delivery fails.
+ */
+export async function sendDocumentSigningCancelledEmail(
+  input: SendDocumentSigningCancelledEmailInput,
+  deps: DocumentSigningEmailServiceDeps = {}
+): Promise<void> {
+  const lead = `${input.organizationName} is changing ${input.documentTitle}, so the signing link you were sent no longer works.`
+  const next = input.signed
+    ? "Your signature no longer counts. If they still need it, you will get a new link to sign the changed document."
+    : "If they still need your signature, you will get a new link."
+
+  await deliverTransactionalEmail({
+    name: "document",
+    logPrefix: "document_signing_cancelled_email",
+    ids: { documentId: input.documentId, recipientId: input.recipientId },
+    // Nothing to open: the old link is gone and a new one comes with its own email.
+    path: () => "/",
+    deliveryReference: `document-signing-cancelled/${input.documentId}/${input.recipientId}/${input.revokedAt}`,
+    toEmail: input.recipientEmail,
+    compose: () => ({
+      subject: `${input.documentTitle} is being changed`,
+      contentHtml: toParagraphs([lead, next]),
+      text: `${lead} ${next}`,
+    }),
+    fail: (message, statusCode) => new DocumentSigningEmailServiceError(message, statusCode),
+    explainRejection: true,
+    transport: deps.transport,
+  })
+}
+
+/** The sender of a round one signer declined. */
+export type SendDocumentSigningDeclinedEmailInput = {
+  declinedAt: string
+  declinerName: string
+  documentId: string
+  documentTitle: string
+  reason: string
+  recipientEmail: string
+}
+
+/**
+ * Tells the sender a signer declined, and why; the document is a draft again.
+ *
+ * @param input - Document, who declined, their reason, and the sender's address.
+ * @param deps - Optional email transport dependency for tests.
+ * @returns Resolves after EmailJS accepts the email.
+ * @throws DocumentSigningEmailServiceError when configuration or delivery fails.
+ */
+export async function sendDocumentSigningDeclinedEmail(
+  input: SendDocumentSigningDeclinedEmailInput,
+  deps: DocumentSigningEmailServiceDeps = {}
+): Promise<void> {
+  const lead = `${input.declinerName} declined to sign ${input.documentTitle}.`
+  const reason = `Their reason: “${input.reason}”`
+  const next = "The document is a draft again and every signing link has stopped working. Change it and send it again when you are ready."
+
+  await deliverTransactionalEmail({
+    name: "document",
+    logPrefix: "document_signing_declined_email",
+    ids: { documentId: input.documentId },
+    path: () => `/documents/${encodeURIComponent(input.documentId)}/edit`,
+    deliveryReference: `document-signing-declined/${input.documentId}/${input.declinedAt}`,
+    toEmail: input.recipientEmail,
+    compose: () => ({
+      subject: `${input.declinerName} declined to sign ${input.documentTitle}`,
+      contentHtml: toParagraphs([lead, reason, next]),
+      text: `${lead} ${reason} ${next}`,
+    }),
+    fail: (message, statusCode) => new DocumentSigningEmailServiceError(message, statusCode),
+    explainRejection: true,
+    transport: deps.transport,
+  })
+}
+
+/** One signer, or the sender, of a document everyone has signed. */
+export type SendSignedCopyEmailInput = {
+  documentId: string
+  documentTitle: string
+  organizationName: string
+  recipientEmail: string
+  token: string
+}
+
+/**
+ * Sends a link to the finished, signed paper; it works for 30 days.
+ *
+ * @param input - Document, organization, address and the copy link's token.
+ * @param deps - Optional email transport dependency for tests.
+ * @returns Resolves after EmailJS accepts the email.
+ * @throws DocumentSigningEmailServiceError when configuration or delivery fails.
+ */
+export async function sendSignedCopyEmail(
+  input: SendSignedCopyEmailInput,
+  deps: DocumentSigningEmailServiceDeps = {}
+): Promise<void> {
+  const lead = `Everyone has signed ${input.documentTitle} from ${input.organizationName}.`
+  const next = "Download your signed copy and keep it. The link works for 30 days; the last page records who signed, and when."
+
+  await deliverTransactionalEmail({
+    name: "document",
+    logPrefix: "document_signed_copy_email",
+    ids: { documentId: input.documentId },
+    path: () => `/sign/copy/${encodeURIComponent(input.token)}`,
+    deliveryReference: `document-signed-copy/${input.documentId}/${createHash("sha256").update(input.token).digest("hex").slice(0, 16)}`,
+    toEmail: input.recipientEmail,
+    compose: (copyUrl) => ({
+      subject: `Signed: ${input.documentTitle}`,
+      contentHtml: `${toParagraphs([lead, next])}<p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:16px;"><a href="${escapeHtml(copyUrl)}">Download the signed copy</a></p>`,
+      text: `${lead} ${next} ${copyUrl}`,
+    }),
+    fail: (message, statusCode) => new DocumentSigningEmailServiceError(message, statusCode),
+    explainRejection: true,
+    transport: deps.transport,
+  })
+}
+
+function toParagraphs(lines: string[]): string {
+  return lines
+    .map((line) => `<p style="margin:0 0 12px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">${escapeHtml(line)}</p>`)
+    .join("")
+}

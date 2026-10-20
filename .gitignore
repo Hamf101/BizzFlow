@@ -64,3 +64,4 @@ temp/
 
 # ZCode local session directory
 .zcode/
+scripts/flow-bench/sources/

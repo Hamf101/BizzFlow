@@ -80,7 +80,7 @@ export function FlowModelPicker({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Flow model: ${label}`}
-        className="-ml-1 inline-flex min-h-11 items-center gap-1 rounded-[8px] px-1.5 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-60 md:min-h-8"
+        className="-ml-1 inline-flex min-h-11 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-60 md:min-h-8"
         disabled={disabled}
       >
         {label}

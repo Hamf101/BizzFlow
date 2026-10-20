@@ -16,7 +16,11 @@ type FakeTableName =
   | "document_activity_events"
   | "document_answers"
   | "document_guest_grants"
+  | "document_recent_accesses"
   | "audit_logs"
+  | "org_units"
+  | "org_unit_members"
+  | "organization_roles"
 
 type FakeTables = Record<FakeTableName, FakeRow[]>
 
@@ -51,7 +55,11 @@ export class FakeSupabaseClient {
       document_activity_events: seed.document_activity_events ?? [],
       document_answers: seed.document_answers ?? [],
       document_guest_grants: seed.document_guest_grants ?? [],
+      document_recent_accesses: seed.document_recent_accesses ?? [],
       audit_logs: seed.audit_logs ?? [],
+      org_units: seed.org_units ?? [],
+      org_unit_members: seed.org_unit_members ?? [],
+      organization_roles: seed.organization_roles ?? [],
     }
   }
 
@@ -512,6 +520,21 @@ class FakeQueryBuilder {
     return this
   }
 
+  // As PostgREST's upsert on the table's primary key: a row with the same key is replaced.
+  upsert(value: FakeRow): FakeQueryBuilder {
+    const key = this.tableName === "org_unit_members" ? ["unit_id", "user_id"] : ["id"]
+    const table = this.client.tables[this.tableName]
+    this.client.tables[this.tableName] = table.filter((row: FakeRow) => !key.every((column) => row[column] === value[column]))
+    this.insertRows = [value]
+    return this
+  }
+
+  neq(column: string, value: unknown): FakeQueryBuilder {
+    // As SQL: a null is never unequal to anything.
+    this.filters.push((row: FakeRow) => row[column] != null && row[column] !== value)
+    return this
+  }
+
   eq(column: string, value: unknown): FakeQueryBuilder {
     this.filters.push((row: FakeRow) => row[column] === value)
     return this
@@ -529,6 +552,11 @@ class FakeQueryBuilder {
 
   gt(column: string, value: unknown): FakeQueryBuilder {
     this.filters.push((row: FakeRow) => String(row[column]) > String(value))
+    return this
+  }
+
+  lt(column: string, value: unknown): FakeQueryBuilder {
+    this.filters.push((row: FakeRow) => row[column] !== null && String(row[column]) < String(value))
     return this
   }
 
@@ -732,6 +760,7 @@ export function createDocumentRow(overrides: FakeRow = {}): FakeRow {
     folder_id: null,
     title: "Signed contract",
     description: null,
+    source_kind: "upload",
     current_version_id: "version-1",
     lifecycle_state: lifecycleState,
     created_by: "user-1",

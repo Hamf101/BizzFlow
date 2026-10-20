@@ -58,6 +58,7 @@ import {
 } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import type { DocumentCard } from "@/services/document-service"
+import { FLOW_FILE_TYPES } from "@/types/template-flow"
 import type {
   AccessibleDocumentFolder,
   AccessibleDocumentSummary,
@@ -72,6 +73,8 @@ export type FilesWorkspaceActions = {
   archiveDocument: FormAction
   archiveFolder: FormAction
   createFolder: FormAction
+  /** Starts an empty sheet in a folder, null for the top of Files, and opens it. */
+  createSheet: (folderId: string | null) => Promise<void>
   requestDocumentPurge: FormAction
   requestFolderPurge: FormAction
   restoreDocument: FormAction
@@ -224,6 +227,14 @@ export function FilesWorkspace({
       : []
 
   const canShare = (item: { accessLevel: string; lifecycleState: DocumentLifecycleState }): boolean => canShareResource(membership, item)
+  // An upload Flow can recreate a form from, as a template the member may start; what is in Trash is out of its reach.
+  const canStartTemplates =
+    canPerformOrganizationAction(membership, "templates:create") || canPerformOrganizationAction(membership, "templates:manage")
+  const flowable = (document: AccessibleDocumentSummary): boolean =>
+    canStartTemplates &&
+    document.sourceKind !== "generated" &&
+    lifecycle !== "trash" &&
+    FLOW_FILE_TYPES.includes(cards.get(document.id)?.contentType ?? "")
 
   function folderMenu(folder: AccessibleDocumentFolder): ReactNode {
     const manageable = canManageFolders && isManageable(folder)
@@ -269,7 +280,7 @@ export function FilesWorkspace({
   function documentMenu(document: AccessibleDocumentSummary): ReactNode {
     const manageable = canManageDocuments && isManageable(document)
 
-    if (!manageable && !canShare(document)) {
+    if (!manageable && !canShare(document) && !flowable(document)) {
       return null
     }
 
@@ -345,10 +356,10 @@ export function FilesWorkspace({
         return {
           content: card?.content ?? null,
           count: null,
-          extension: generated ? null : getFileExtension(document.title),
+          extension: document.sourceKind === "upload" ? getFileExtension(document.title) : null,
           href: getDocumentHref(document),
           id: document.id,
-          kind: generated ? "document" : "upload",
+          kind: generated ? "document" : document.sourceKind === "sheet" ? "sheet" : "upload",
           menu: documentMenu(document),
           modified: <LocalDate value={document.updatedAt} />,
           name: document.title,
@@ -391,6 +402,7 @@ export function FilesWorkspace({
             : [],
         shareable: canShare(document),
         sendable: Boolean(document.templateId) && canSendDocument(membership, document),
+        flowable: flowable(document),
       })
     ),
   ]
@@ -489,7 +501,12 @@ export function FilesWorkspace({
               views={listViews}
             />
             {offersNew ? (
-              <NewFileMenu addDocumentHref={addDocumentHref} newFolder={newFolder} />
+              <NewFileMenu
+                addDocumentHref={addDocumentHref}
+                createSheet={addDocumentHref ? actions.createSheet : null}
+                folderId={activeFolder?.id ?? null}
+                newFolder={newFolder}
+              />
             ) : null}
           </div>
         </div>
@@ -540,7 +557,7 @@ function FolderPath({
   view: FileListView
 }): ReactElement {
   const linkClassName =
-    "truncate rounded-[6px] outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35"
+    "truncate rounded-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35"
 
   return (
     <nav aria-label="Folder path" className={cn("-mt-1", className)}>

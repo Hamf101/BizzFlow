@@ -91,7 +91,7 @@ test.describe("invitations", () => {
 
       const dashboard = page.getByRole("main")
 
-      await expect(dashboard.getByText("Welcome back, Sam!", { exact: true })).toBeVisible()
+      await expect(dashboard.getByRole("heading", { level: 1, name: "Welcome back, Sam" })).toBeVisible()
       // The workspace's name sits in the account menu on every screen size.
       await page.getByRole("button", { name: /^Open account menu/ }).click()
       await expect(page.getByRole("menu").getByText(tenant.organizationName)).toBeVisible()

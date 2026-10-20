@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { recordAuditLogBestEffort, type RecordAuditLogInput } from "@/services/audit-service"
@@ -391,6 +391,22 @@ async function loadSnapshot(client: Client, input: SendToAnswerInput): Promise<S
   // Answers are kept as submissions of a template, so a document needs one.
   if (!document.templateId || document.templateRevision === null) {
     throw new PublicFormServiceError("Only a document made from a template can be sent to answer for now.", 409)
+  }
+
+  // Its answers would keep the template from ever leaving Trash.
+  const { data: template, error } = await client
+    .from("document_templates")
+    .select("trashed_at")
+    .eq("id", document.templateId)
+    .eq("org_id", input.organizationId)
+    .maybeSingle()
+
+  if (error) {
+    throw new PublicFormServiceError(FAILED, 500)
+  }
+
+  if ((template as { trashed_at: string | null } | null)?.trashed_at) {
+    throw new PublicFormServiceError("The template this document was made from is in Trash. Restore it to send this document.", 409)
   }
 
   return {

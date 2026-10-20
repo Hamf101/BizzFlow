@@ -13,6 +13,10 @@ export type DocumentPdfSigner = {
   requiresSignature: boolean
   status: "pending" | "viewed" | "signed"
   signedAt: string | null
+  /** When they agreed to sign electronically, for the signing certificate. */
+  consentedAt?: string | null
+  /** The address they signed from, for the signing certificate. */
+  signedIp?: string | null
   signatureDataUrl?: string | null
   initialsDataUrl?: string | null
 }
@@ -43,6 +47,8 @@ export type PdfBlockFlowItem = {
   answerOverride?: string
   fieldContinued?: boolean
   listMarkers?: string[]
+  /** How far each of a list's items is set in: 0 at the top. */
+  listLevels?: number[]
   /** Where it sits across the page, when not across the whole of it. */
   frame?: BlockFrame
   /** A cell that the next cell on its page sits on, with no gap between. */
@@ -63,6 +69,8 @@ export type PdfFlowItem = (
   | { kind: "title"; title: string }
   | { kind: "section_label"; label: string }
   | { kind: "field_group_label"; label: string }
+  /** On a blank form, the rule in words above the branch it shows. */
+  | { kind: "cue"; label: string }
   | PdfBlockFlowItem
   | {
       kind: "columns"

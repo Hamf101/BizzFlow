@@ -27,9 +27,9 @@ const LABEL: Record<Level, string> = { contributor: "Editor", editor: "Editor", 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ROW = "flex items-center justify-between gap-3 py-2"
 const CHOICE =
-  "flex w-full items-center justify-between gap-3 rounded-[10px] px-2.5 py-2 text-left text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
+  "flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
 const SELECT =
-  "h-9 rounded-[8px] border border-border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+  "h-9 rounded-md border border-border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
 
 /**
  * Who can open a document or a folder, and a place to change it.

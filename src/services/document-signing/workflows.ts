@@ -2,21 +2,28 @@ import { randomUUID } from "node:crypto"
 import { isDeepStrictEqual } from "node:util"
 
 import type { OrganizationPermissionAction } from "@/lib/permissions"
+import { recordAuditLogBestEffort } from "@/services/audit-service"
 import {
+  sendDocumentSigningCancelledEmail as defaultSendDocumentSigningCancelledEmail,
+  sendDocumentSigningDeclinedEmail as defaultSendDocumentSigningDeclinedEmail,
   sendDocumentSigningEmail as defaultSendDocumentSigningEmail,
   DocumentSigningEmailServiceError,
 } from "@/services/document-signing-email-service"
 import {
   assertRequiredAnswersComplete,
+  calculationBase,
   collectFields,
   deriveChangedAnswerPatch,
+  keepValidAnswers,
   normalizeAnswerPatch,
   pruneHiddenAnswerPatch,
+  withCalculatedAnswers,
   pruneHiddenAnswerValues,
   templateRequiresRecipientInitials,
 } from "@/services/document-signing/answer-validation"
 import type {
   CompletePublicDocumentSigningInput,
+  DeclinePublicDocumentSigningInput,
   DocumentSigningServiceDeps,
   GetGeneratedDocumentSigningViewInput,
   GetPublicDocumentSigningViewInput,
@@ -30,14 +37,19 @@ import {
   normalizeOptionalDrawing,
   normalizeRequiredDrawing,
 } from "@/services/document-signing/drawing-validation"
+import { loadProfileEmail } from "@/services/document-signing/signed-copies"
+import { MAX_ATTEMPTS, waitBeforeRetry } from "@/services/serialization-retry"
 import {
+  CHANGED_ANSWERS_MESSAGE,
   createDatabaseError,
   DocumentSigningServiceError,
   runSigningOperation,
 } from "@/services/document-signing/errors"
 import {
+  cancelSigningWorkflow,
   cleanupRecipients,
   completeRecipientSignature,
+  declineSigningWorkflow,
   insertSigningRecipients,
   loadGeneratedDocumentView,
   loadPublicSigningView,
@@ -181,64 +193,104 @@ export async function saveGeneratedDocumentAnswers(
         "mutation",
         "Archived documents cannot be changed."
       )
-      const view = await loadGeneratedDocumentView(
-        client,
-        input.organizationId,
-        input.documentId
-      )
-
-      if (view.workflowStatus === "completed") {
-        throw new DocumentSigningServiceError(
-          "Completed documents cannot be changed.",
-          409
+      return retryOnChangedAnswers(async (): Promise<GeneratedDocumentSigningView> => {
+        const view = await loadGeneratedDocumentView(
+          client,
+          input.organizationId,
+          input.documentId
         )
-      }
 
-      // A signature stands for the answers as they were signed, so the last
-      // word belongs to the signers from here on.
-      if (
-        view.recipients.some(
-          (recipient: DocumentSigningRecipient): boolean =>
-            recipient.status === "signed"
-        )
-      ) {
-        throw new DocumentSigningServiceError(SIGNED_ANSWERS_MESSAGE, 409)
-      }
-
-      const content = view.document.templateSnapshot
-      const normalizedPatch = await normalizeAnswerPatch(
-        collectFields(content),
-        input.values,
-        { sent: view.workflowStatus !== "draft" || view.recipients.length > 0 }
-      )
-      const visiblePatch = pruneHiddenAnswerPatch(
-        content,
-        view.answers,
-        normalizedPatch
-      )
-      const persistedValues = await mergeGeneratedDocumentAnswers(
-        client,
-        input.organizationId,
-        input.documentId,
-        visiblePatch
-      )
-
-      for (const [fieldKey, value] of Object.entries(visiblePatch)) {
-        if (!isDeepStrictEqual(persistedValues[fieldKey], value)) {
+        if (view.workflowStatus === "completed") {
           throw new DocumentSigningServiceError(
-            "Saved document answers could not be verified.",
-            500
+            "Completed documents cannot be changed.",
+            409
           )
         }
-      }
 
-      return loadGeneratedDocumentView(
-        client,
-        input.organizationId,
-        input.documentId
-      )
+        // A signature stands for the answers as they were signed, so the last
+        // word belongs to the signers from here on.
+        if (
+          view.recipients.some(
+            (recipient: DocumentSigningRecipient): boolean =>
+              recipient.status === "signed"
+          )
+        ) {
+          throw new DocumentSigningServiceError(SIGNED_ANSWERS_MESSAGE, 409)
+        }
+
+        const content = view.document.templateSnapshot
+        const normalizedPatch = await normalizeAnswerPatch(
+          collectFields(content),
+          input.values,
+          { sent: view.workflowStatus !== "draft" || view.recipients.length > 0 }
+        )
+        const visiblePatch = withCalculatedAnswers(
+          content,
+          view.answers,
+          pruneHiddenAnswerPatch(content, view.answers, normalizedPatch)
+        )
+        const persistedValues = await mergeGeneratedDocumentAnswers(
+          client,
+          input.organizationId,
+          input.documentId,
+          visiblePatch,
+          calculationBase(content, view.answers)
+        )
+
+        for (const [fieldKey, value] of Object.entries(visiblePatch)) {
+          if (!isDeepStrictEqual(persistedValues[fieldKey], value)) {
+            throw new DocumentSigningServiceError(
+              "Saved document answers could not be verified.",
+              500
+            )
+          }
+        }
+
+        return loadGeneratedDocumentView(
+          client,
+          input.organizationId,
+          input.documentId
+        )
+      })
     }
   )
+}
+
+/**
+ * Fills a document with answers read off a form Flow recreated it from. Each
+ * answer its field refuses is dropped, never the rest, and those left are
+ * saved as the member's own save saves them: pruned, calculated, and refused
+ * once the document is done or someone has signed.
+ *
+ * @param input - Actor, generated document, and the untrusted answers.
+ * @param deps - Optional injected database dependency for tests.
+ * @returns The document as it stands after the save, and how many answers did and didn't fit.
+ * @throws DocumentSigningServiceError for access, a done or signed document, or answers that are not an object.
+ */
+export async function fillGeneratedDocumentAnswers(
+  input: GetGeneratedDocumentSigningViewInput & { answers: unknown },
+  deps: DocumentSigningServiceDeps = {}
+): Promise<{ dropped: number; kept: number; view: GeneratedDocumentSigningView }> {
+  const { actorUserId, documentId, organizationId } = input
+
+  return runSigningOperation("fill_generated_document_answers", { actorUserId, documentId, organizationId }, async () => {
+    if (!input.answers || typeof input.answers !== "object" || Array.isArray(input.answers)) {
+      throw new DocumentSigningServiceError("Document answers must be a JSON object.", 400)
+    }
+
+    const view = await getGeneratedDocumentSigningView({ actorUserId, documentId, organizationId }, deps)
+    const content = view.document.templateSnapshot
+    // Counted as the save will keep them: an answer the page's own answers hide is pruned.
+    const values = pruneHiddenAnswerPatch(content, view.answers, await keepValidAnswers(collectFields(content), input.answers as Record<string, unknown>))
+    const kept = Object.keys(values).length
+
+    // Saved even when none fit, so its refusals still answer.
+    return {
+      dropped: Object.keys(input.answers).length - kept,
+      kept,
+      view: await saveGeneratedDocumentAnswers({ actorUserId, documentId, organizationId, values }, deps),
+    }
+  })
 }
 
 /**
@@ -394,8 +446,8 @@ function parseDocumentContent(value: unknown): TemplateContent {
  *
  * @param input - Actor, generated document, and recipient collection.
  * @param deps - Optional id, token, clock, database, and email dependencies.
- * @returns Created recipients after EmailJS accepts every invitation.
- * @throws DocumentSigningServiceError for invalid recipients, state, or delivery.
+ * @returns Created recipients, and how many of their emails could not be sent.
+ * @throws DocumentSigningServiceError for invalid recipients or state, before anything is saved.
  */
 export async function sendDocumentForSigning(
   input: SendDocumentForSigningInput,
@@ -478,6 +530,7 @@ export async function sendDocumentForSigning(
               signed_at: null,
               signature_data: null,
               initials_data: null,
+              sent_by: input.actorUserId,
             },
           }
         }
@@ -567,16 +620,15 @@ export async function sendDocumentForSigning(
           recipientCount: createdRows.length,
           failedDeliveries,
         })
-        throw new DocumentSigningServiceError(
-          "Some signing emails could not be delivered. The recipients were saved so you can resend them.",
-          502
-        )
       }
 
+      // The round is saved and out for signing either way; an email that did
+      // not go is counted, not thrown, so no one sends the document again.
       return {
         documentId: input.documentId,
         workflowStatus: "awaiting_signatures",
         recipients: createdRows.map(mapSigningRecipient),
+        undelivered: failedDeliveries,
       }
     }
   )
@@ -689,6 +741,82 @@ export async function resendDocumentSigningInvitation(
 }
 
 /**
+ * Takes a document awaiting signatures back to an editable draft, so its
+ * sender can change it and send it again. Every signer's link stops working
+ * and every signature so far stops counting: each was given for the words as
+ * they stood. The answers stay, since nothing records who typed which; each
+ * signer is told by email, best effort, as the cancel has already happened.
+ *
+ * @param input - Actor, organization, and document identifiers.
+ * @param deps - Optional database, clock, audit, and email dependencies.
+ * @returns How many signatures were cancelled.
+ * @throws DocumentSigningServiceError: 403 without send and fill rights, 404
+ *   for a document they cannot open, 409 once completed or when not sent.
+ */
+export async function cancelDocumentSigning(
+  input: GetGeneratedDocumentSigningViewInput,
+  deps: DocumentSigningServiceDeps = {}
+): Promise<{ cancelledSignatures: number }> {
+  return runSigningOperation("cancel_document_signing", input, async () => {
+    const client = resolveSigningClient(deps.client)
+    const { actorUserId, documentId, organizationId } = input
+
+    // Whoever may send it may take it back, and only to edit it.
+    await requireMemberDocumentAccess(client, organizationId, documentId, actorUserId, "contributor", "mutation", "documents:send", "You cannot send documents for signing.")
+    await requireMemberDocumentAccess(client, organizationId, documentId, actorUserId, "contributor", "mutation", "documents:fill", "You cannot edit this document.")
+    await requireMemberSigningDocumentLifecycle(client, organizationId, documentId, "mutation", "Archived documents cannot be changed.")
+    const view = await loadGeneratedDocumentView(client, organizationId, documentId)
+
+    if (view.workflowStatus === "completed") {
+      throw new DocumentSigningServiceError("Completed documents cannot be changed. Edit a copy instead.", 409)
+    }
+
+    if (view.workflowStatus !== "awaiting_signatures") {
+      throw new DocumentSigningServiceError("This document is not waiting for signatures.", 409)
+    }
+
+    const revoked = await cancelSigningWorkflow(client, organizationId, documentId)
+    const cancelledSignatures = revoked.filter((recipient) => recipient.status === "signed").length
+    const revokedAt = getSigningNow(deps.now).toISOString()
+
+    await recordAuditLogBestEffort(
+      {
+        organizationId,
+        actorUserId,
+        action: "document.signing_cancelled",
+        targetType: "document",
+        targetId: documentId,
+        metadata: { cancelledSignatures, revokedLinks: revoked.length },
+      },
+      deps.recordAuditLog
+    )
+
+    const sendEmail = deps.sendDocumentSigningCancelledEmail ?? defaultSendDocumentSigningCancelledEmail
+    const deliveries = await Promise.allSettled(
+      revoked.map((recipient) =>
+        sendEmail({
+          documentId,
+          documentTitle: view.document.title,
+          organizationName: view.organizationName,
+          recipientEmail: recipient.email,
+          recipientId: recipient.id,
+          recipientName: recipient.name,
+          revokedAt,
+          signed: recipient.status === "signed",
+        })
+      )
+    )
+    const failedDeliveries = deliveries.filter((delivery) => delivery.status === "rejected").length
+
+    if (failedDeliveries > 0) {
+      console.warn("document_signing_cancelled_email_incomplete", { organizationId, documentId, failedDeliveries })
+    }
+
+    return { cancelledSignatures }
+  })
+}
+
+/**
  * Loads a generated document through a valid private recipient token.
  *
  * @param input - Raw URL token kept out of persistence and logs.
@@ -743,6 +871,11 @@ export async function completePublicDocumentSigning(
     "complete_public_document_signing",
     {},
     async (): Promise<PublicDocumentSigningView> => {
+      // ESIGN-style consent comes first: without it nothing is read or signed.
+      if (input.consented !== true) {
+        throw new DocumentSigningServiceError("Agree to sign electronically to sign.", 400)
+      }
+
       const client = resolveSigningClient(deps.client)
       const token = normalizeToken(input.token)
       const tokenHash = hashToken(token)
@@ -759,83 +892,191 @@ export async function completePublicDocumentSigning(
         return loadPublicSigningView(client, recipient)
       }
 
-      const view = await loadPublicSigningView(client, recipient)
-      const isLastRequiredRecipient = view.signers.every(
-        (signer: PublicSignerStatus): boolean =>
-          signer.id === recipient.id ||
-          !signer.requiresSignature ||
-          signer.status === "signed"
-      )
-      const fieldByKey = collectFields(view.document.templateSnapshot)
-      const submittedValues = await normalizeAnswerPatch(fieldByKey, input.values)
-      const baselineValues =
-        input.baselineValues === undefined
-          ? undefined
-          : await normalizeAnswerPatch(fieldByKey, input.baselineValues)
-      const changedAnswerPatch = deriveChangedAnswerPatch(
-        submittedValues,
-        baselineValues
-      )
-      const answerPatch = pruneHiddenAnswerPatch(
-        view.document.templateSnapshot,
-        view.answers,
-        changedAnswerPatch
-      )
-      // An answer someone else has signed is kept as signed by
-      // complete_document_recipient_signature, under its row lock.
-      const effectiveValues = pruneHiddenAnswerValues(
-        view.document.templateSnapshot,
-        { ...view.answers, ...answerPatch }
-      )
-      assertRequiredAnswersComplete(
-        view.document.templateSnapshot,
-        fieldByKey,
-        effectiveValues,
-        isLastRequiredRecipient
-      )
-      const requiresInitials = templateRequiresRecipientInitials(
-        view.document.templateSnapshot,
-        effectiveValues,
-        view.signers.findIndex((signer: PublicSignerStatus): boolean => signer.id === recipient.id) + 1
-      )
-      const [signatureData, initialsData] = await Promise.all([
-        recipient.requires_signature
-          ? normalizeRequiredDrawing(input.signatureDataUrl, "signature")
-          : normalizeOptionalDrawing(input.signatureDataUrl, "signature"),
-        requiresInitials
-          ? normalizeRequiredDrawing(
-              input.initialsDataUrl ?? null,
-              "initials acknowledgement"
-            )
-          : normalizeOptionalDrawing(
-              input.initialsDataUrl ?? null,
-              "initials acknowledgement"
-            ),
-      ])
-      const workflowStatus = await completeRecipientSignature(client, {
-        organizationId: recipient.org_id,
-        documentId: recipient.document_id,
-        recipientId: recipient.id,
-        tokenHash,
-        values: answerPatch,
-        signatureData,
-        initialsData,
-      })
-
-      if (
-        workflowStatus !== "awaiting_signatures" &&
-        workflowStatus !== "completed"
-      ) {
-        throw new DocumentSigningServiceError(
-          "Signing completed with an invalid workflow state.",
-          500
+      return retryOnChangedAnswers(async (): Promise<PublicDocumentSigningView> => {
+        const view = await loadPublicSigningView(client, recipient)
+        const isLastRequiredRecipient = view.signers.every(
+          (signer: PublicSignerStatus): boolean =>
+            signer.id === recipient.id ||
+            !signer.requiresSignature ||
+            signer.status === "signed"
         )
-      }
+        const fieldByKey = collectFields(view.document.templateSnapshot)
+        const submittedValues = await normalizeAnswerPatch(fieldByKey, input.values)
+        const baselineValues =
+          input.baselineValues === undefined
+            ? undefined
+            : await normalizeAnswerPatch(fieldByKey, input.baselineValues)
+        const changedAnswerPatch = deriveChangedAnswerPatch(
+          submittedValues,
+          baselineValues
+        )
+        const answerPatch = withCalculatedAnswers(
+          view.document.templateSnapshot,
+          view.answers,
+          pruneHiddenAnswerPatch(view.document.templateSnapshot, view.answers, changedAnswerPatch)
+        )
+        // An answer someone else has signed is kept as signed by
+        // complete_document_recipient_signature, under its row lock.
+        const effectiveValues = pruneHiddenAnswerValues(
+          view.document.templateSnapshot,
+          { ...view.answers, ...answerPatch }
+        )
+        assertRequiredAnswersComplete(
+          view.document.templateSnapshot,
+          fieldByKey,
+          effectiveValues,
+          isLastRequiredRecipient
+        )
+        const requiresInitials = templateRequiresRecipientInitials(
+          view.document.templateSnapshot,
+          effectiveValues,
+          view.signers.findIndex((signer: PublicSignerStatus): boolean => signer.id === recipient.id) + 1
+        )
+        const [signatureData, initialsData] = await Promise.all([
+          recipient.requires_signature
+            ? normalizeRequiredDrawing(input.signatureDataUrl, "signature")
+            : normalizeOptionalDrawing(input.signatureDataUrl, "signature"),
+          requiresInitials
+            ? normalizeRequiredDrawing(
+                input.initialsDataUrl ?? null,
+                "initials acknowledgement"
+              )
+            : normalizeOptionalDrawing(
+                input.initialsDataUrl ?? null,
+                "initials acknowledgement"
+              ),
+        ])
+        const workflowStatus = await completeRecipientSignature(client, {
+          organizationId: recipient.org_id,
+          documentId: recipient.document_id,
+          recipientId: recipient.id,
+          tokenHash,
+          values: answerPatch,
+          signatureData,
+          initialsData,
+          expectedValues: calculationBase(view.document.templateSnapshot, view.answers),
+          consented: true,
+          ip: input.ip ?? null,
+        })
 
-      const updatedRecipient = await loadRecipientByToken(client, tokenHash)
-      return loadPublicSigningView(client, updatedRecipient)
+        if (
+          workflowStatus !== "awaiting_signatures" &&
+          workflowStatus !== "completed"
+        ) {
+          throw new DocumentSigningServiceError(
+            "Signing completed with an invalid workflow state.",
+            500
+          )
+        }
+
+        const updatedRecipient = await loadRecipientByToken(client, tokenHash)
+        return loadPublicSigningView(client, updatedRecipient)
+      })
     }
   )
+}
+
+/**
+ * Lets a signer turn the document down with a reason: the document goes back to
+ * its sender as a draft, every link stops working, and the sender and the
+ * other signers are told. An email that fails never undoes the decline.
+ *
+ * @param input - Private token and the signer's reason.
+ * @param deps - Optional clock, database, email and audit dependencies for tests.
+ * @returns The document's title and organization, for the page that confirms it.
+ * @throws DocumentSigningServiceError for a missing reason, a bad link, or a signer who signed.
+ */
+export async function declinePublicDocumentSigning(
+  input: DeclinePublicDocumentSigningInput,
+  deps: DocumentSigningServiceDeps = {}
+): Promise<{ documentTitle: string; organizationName: string }> {
+  return runSigningOperation("decline_public_document_signing", {}, async () => {
+    const reason = input.reason.trim()
+
+    if (reason.length < 1 || reason.length > 500) {
+      throw new DocumentSigningServiceError("Say why you are not signing, in up to 500 characters.", 400)
+    }
+
+    const client = resolveSigningClient(deps.client)
+    const recipient = await loadRecipientByToken(client, hashToken(normalizeToken(input.token)))
+    assertRecipientLinkUsable(recipient, getSigningNow(deps.now))
+    await requirePublicSigningDocumentLifecycle(client, recipient, "mutation")
+
+    if (recipient.status === "signed") {
+      throw new DocumentSigningServiceError("You have already signed this document.", 409)
+    }
+
+    const view = await loadPublicSigningView(client, recipient)
+    const revoked = await declineSigningWorkflow(client, recipient, reason)
+    const declinedAt = getSigningNow(deps.now).toISOString()
+    const documentId = recipient.document_id
+    const organizationId = recipient.org_id
+
+    await recordAuditLogBestEffort(
+      {
+        organizationId,
+        actorUserId: null,
+        action: "document.signing_declined",
+        targetType: "document",
+        targetId: documentId,
+        metadata: { recipientId: recipient.id, revokedLinks: revoked.length },
+      },
+      deps.recordAuditLog
+    )
+
+    const senderEmail = await loadProfileEmail(client, recipient.sent_by ?? view.document.createdBy)
+    const sendDeclined = deps.sendDocumentSigningDeclinedEmail ?? defaultSendDocumentSigningDeclinedEmail
+    const sendCancelled = deps.sendDocumentSigningCancelledEmail ?? defaultSendDocumentSigningCancelledEmail
+    const deliveries = await Promise.allSettled([
+      ...(senderEmail
+        ? [sendDeclined({ declinedAt, declinerName: recipient.name, documentId, documentTitle: view.document.title, reason, recipientEmail: senderEmail })]
+        : []),
+      ...revoked
+        .filter((other) => other.id !== recipient.id)
+        .map((other) =>
+          sendCancelled({
+            documentId,
+            documentTitle: view.document.title,
+            organizationName: view.organizationName,
+            recipientEmail: other.email,
+            recipientId: other.id,
+            recipientName: other.name,
+            revokedAt: declinedAt,
+            signed: other.status === "signed",
+          })
+        ),
+    ])
+    const failedDeliveries = deliveries.filter((delivery) => delivery.status === "rejected").length
+
+    if (failedDeliveries > 0 || !senderEmail) {
+      console.warn("document_signing_declined_email_incomplete", { organizationId, documentId, failedDeliveries, senderFound: Boolean(senderEmail) })
+    }
+
+    return { documentTitle: view.document.title, organizationName: view.organizationName }
+  })
+}
+
+/**
+ * Runs a save that works answers out from the answers it read, from a fresh
+ * read each time the database finds someone else changed them first, after
+ * a pause that spreads colliding writers out; the last conflict reaches the
+ * caller.
+ *
+ * @param attempt - The whole read, work-out and save.
+ * @returns What the save that went through returns.
+ */
+async function retryOnChangedAnswers<T>(attempt: () => Promise<T>): Promise<T> {
+  for (let tries = 1; ; tries += 1) {
+    try {
+      return await attempt()
+    } catch (error) {
+      if (tries === MAX_ATTEMPTS || !(error instanceof DocumentSigningServiceError) || error.message !== CHANGED_ANSWERS_MESSAGE) {
+        throw error
+      }
+
+      await waitBeforeRetry(tries)
+    }
+  }
 }
 
 async function requireMemberDocumentAccess(

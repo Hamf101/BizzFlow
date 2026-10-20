@@ -106,7 +106,7 @@ export async function createPublicDraft(
     target_public_form_token: token,
     target_public_draft_token: draftToken,
     target_submission_id: createId(deps),
-    target_title: `${template.title} (Public)`,
+    target_title: template.title,
     target_template_revision: template.revision,
     target_values: values,
     target_created_at: nowIso(deps),

@@ -40,7 +40,7 @@ export function NewTaskDialog({
     <Dialog>
       <DialogTrigger
         render={
-          <Button className="h-11 rounded-[12px] px-4 font-normal" type="button">
+          <Button className="h-11 rounded-lg px-4 font-normal" type="button">
             <Plus aria-hidden="true" data-icon="inline-start" />
             <span className="max-sm:sr-only">New task</span>
           </Button>

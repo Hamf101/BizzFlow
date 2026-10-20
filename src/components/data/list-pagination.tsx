@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 
 const PAGE_LINK_CLASS = cn(
   buttonVariants({ size: "icon", variant: "ghost" }),
-  "rounded-[10px]"
+  "rounded-lg"
 )
 
 /**

@@ -47,7 +47,7 @@ describe("someone outside the workspace opening a shared document", () => {
 
   it("opens an account, signs in as the invited address, accepts, and lands on the document", async () => {
     await expect(openSharedDocumentWithPasswordAction(openForm())).rejects.toThrow(
-      "NEXT_REDIRECT:/documents/document%201/preview"
+      "NEXT_REDIRECT:/documents/document%201/edit"
     )
     expect(signInWithPassword).toHaveBeenCalledExactlyOnceWith({ email: "sam@example.com", password: PASSWORD })
     expect(acceptDocumentGuestInvite).toHaveBeenCalledExactlyOnceWith({

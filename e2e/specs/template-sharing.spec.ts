@@ -40,7 +40,7 @@ test("staff keep their own template to chosen people, then let a manager use it 
   const looking = await managerPage.context().newPage()
   const look = async () => {
     await looking.goto(`/templates?q=${encodeURIComponent(title)}`)
-    await waitForHydration(looking.getByRole("link", { name: "Templates" }).first())
+    await waitForHydration(looking.getByRole("link", { name: "Dashboard" }).first())
   }
 
   // Keeping it to chosen people takes it away from everyone else, managers included.

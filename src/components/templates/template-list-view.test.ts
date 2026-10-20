@@ -36,6 +36,11 @@ describe("template list view", () => {
         label: "Archived",
         selected: false,
       },
+      {
+        href: "/templates?status=trash&q=lease&sort=title&size=25",
+        label: "Trash",
+        selected: false,
+      },
     ])
   })
 
@@ -44,6 +49,8 @@ describe("template list view", () => {
       getTemplateViewStatuses(templateListState.parse({ status: "archived" }))
     ).toEqual(["archived"])
     expect(getTemplateViewStatuses(templateListState.parse({}))).toBeUndefined()
+    // Trash is not a status: the page asks for it on its own.
+    expect(getTemplateViewStatuses(templateListState.parse({ status: "trash" }))).toBeUndefined()
     expect(
       getTemplateViewStatuses(templateListState.parse({ status: "retired" }))
     ).toBeUndefined()

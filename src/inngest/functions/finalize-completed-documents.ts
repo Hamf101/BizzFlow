@@ -1,8 +1,11 @@
 import { cron } from "inngest"
 
 import { inngest } from "@/inngest/client"
+import { monitorCron } from "@/lib/observability"
 import { runBackgroundStep, type BackgroundStepRunner } from "@/inngest/functions/shared"
 import { finalizeCompletedGeneratedDocuments } from "@/services/generated-document-finalization-service"
+
+const FINALIZE_SWEEP_CRON = "17 * * * *"
 
 /**
  * Scheduled backstop that finalizes completed documents the last signature
@@ -14,12 +17,12 @@ export const finalizeCompletedDocumentsFunction = inngest.createFunction(
   {
     id: "finalize-completed-documents",
     name: "Finalize completed documents",
-    triggers: [cron("17 * * * *")],
+    triggers: [cron(FINALIZE_SWEEP_CRON)],
     concurrency: 1,
     retries: 2,
   },
   ({ step }: { step: BackgroundStepRunner }) =>
     runBackgroundStep(step, "finalize-completed-documents", () =>
-      finalizeCompletedGeneratedDocuments()
+      monitorCron("finalize-completed-documents", FINALIZE_SWEEP_CRON, () => finalizeCompletedGeneratedDocuments())
     )
 )

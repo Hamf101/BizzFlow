@@ -69,7 +69,7 @@ export function DashboardSidebar({
       <div className="relative flex items-center justify-between gap-2">
         <Link
           aria-label="BizFlow dashboard"
-          className="inline-flex shrink-0 items-center gap-2.5 rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="inline-flex shrink-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           href="/dashboard"
         >
           <BizFlowMark className="size-11 shrink-0" />
@@ -86,7 +86,7 @@ export function DashboardSidebar({
         {collapsed ? (
           <button
             // Seen once the keyboard reaches it, so focus is never on something invisible.
-            className="sr-only rounded-[12px] bg-card text-center text-[11px] leading-tight outline-none focus-visible:not-sr-only focus-visible:absolute focus-visible:inset-0 focus-visible:grid focus-visible:place-items-center focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="sr-only rounded-lg bg-card text-center text-[11px] leading-tight outline-none focus-visible:not-sr-only focus-visible:absolute focus-visible:inset-0 focus-visible:grid focus-visible:place-items-center focus-visible:ring-2 focus-visible:ring-ring/40"
             onClick={() => setCollapsed(false)}
             type="button"
           >
@@ -119,7 +119,7 @@ export function DashboardSidebar({
           <WorkspaceSearchTrigger
             aria-label={collapsed ? "Search" : undefined}
             className={cn(
-              "flex h-11 items-center rounded-[8px] pr-3 text-sm text-foreground/80 outline-none transition-colors hover:bg-secondary/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
+              "flex h-11 items-center rounded-md pr-3 text-sm text-foreground/80 outline-none transition-colors hover:bg-secondary/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
               collapsed && "md:w-11 md:pr-0"
             )}
             title={collapsed ? "Search" : undefined}

@@ -130,7 +130,7 @@ function DialogContent({
       >
         <DialogPrimitive.Popup
           className={cn(
-            "relative grid w-full max-w-lg gap-5 rounded-[18px] bg-card p-5 text-card-foreground shadow-[0_18px_60px_rgba(37,35,41,0.22)] ring-1 ring-border/80 outline-none transition-[opacity,transform] duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)] data-[ending-style]:translate-y-1 data-[ending-style]:scale-[0.985] data-[ending-style]:opacity-0 data-[starting-style]:translate-y-1 data-[starting-style]:scale-[0.985] data-[starting-style]:opacity-0 motion-reduce:transform-none motion-reduce:transition-none sm:p-6",
+            "relative grid w-full max-w-lg gap-5 rounded-xl bg-card p-5 text-card-foreground shadow-[0_18px_60px_rgba(37,35,41,0.22)] ring-1 ring-border/80 outline-none transition-[opacity,transform] duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)] data-[ending-style]:translate-y-1 data-[ending-style]:scale-[0.985] data-[ending-style]:opacity-0 data-[starting-style]:translate-y-1 data-[starting-style]:scale-[0.985] data-[starting-style]:opacity-0 motion-reduce:transform-none motion-reduce:transition-none sm:p-6",
             className
           )}
           data-slot="dialog-content"

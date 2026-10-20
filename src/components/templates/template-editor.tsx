@@ -2,18 +2,21 @@
 
 import { Archive, FilePenLine, Files, History, Link2, ListChecks, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { type ReactElement, useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 import type { TemplateDraftInput, TemplateVersionResult } from "@/app/(dashboard)/templates/actions"
-import { useFlowHandoff } from "@/components/flow/flow-handoff"
+import { type FlowHandoff, useFlowHandoff } from "@/components/flow/flow-handoff"
 import { DesignToolsContext } from "@/components/editor/design-tools"
 import { DESIGN_TOOLS } from "@/components/editor/design-tools-provided"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
+import { whyNotFill } from "@/components/documents/fill-answers"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
 import { FormatBar } from "@/components/editor/format-bar"
 import { FlowDockSlot, FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
+import { ExportMenu, ExportMenuItems, exportLinks } from "@/components/editor/export-menu"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
 import {
@@ -58,16 +61,12 @@ import type { WorkingCopy } from "@/lib/collaboration/working-copy-doc"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
 import {
-  evaluateTemplateQuality,
-  isTemplateQualityIssueSaveBlocking,
-} from "@/services/templates/template-quality-service"
-import {
   type DocumentTemplate,
   type DocumentTemplateVersion,
   type TemplateContentV3,
   upgradeV2TemplateContentToV3,
 } from "@/types/template"
-import type { TemplateFlowMessage, TemplateFlowProposal } from "@/types/template-flow"
+import type { FlowFillResult, TemplateFlowMessage, TemplateFlowProposal } from "@/types/template-flow"
 import { withGeneratedFieldKeys } from "@/types/template-structure"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
@@ -78,12 +77,16 @@ type TemplateEditorProps = {
   categorySuggestions?: readonly string[]
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
+  /** Makes a document of the template filled with answers Flow read off a form. */
+  fillCopyAction: (templateId: string, answers: unknown) => Promise<FlowFillResult>
   initialFlowMessages: TemplateFlowMessage[]
   loadVersionAction: (templateId: string, revision: number) => Promise<TemplateVersionResult>
   /** Who is editing, as the others in the room see them. */
   me: Readonly<{ id: string; name: string }>
   publishAction: (formData: FormData) => Promise<void>
   saveDraftAction: (input: TemplateDraftInput) => Promise<SaveResult>
+  /** A template just made with New: the cursor starts on its page. */
+  startTyping?: boolean
   template: DocumentTemplate
   /** The versions it was published at, newest first. */
   versions?: readonly DocumentTemplateVersion[]
@@ -103,6 +106,7 @@ export function TemplateEditor({
   archiveAction,
   categorySuggestions = [],
   editorLayout,
+  fillCopyAction,
   initialFlowMessages,
   loadVersionAction,
   me,
@@ -110,6 +114,7 @@ export function TemplateEditor({
   saveDraftAction,
   template,
   versions = [],
+  startTyping = false,
 }: TemplateEditorProps): ReactElement {
   const initial = useMemo(
     (): TemplateEditorState => ({
@@ -151,7 +156,7 @@ export function TemplateEditor({
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
   const [flowUndo, setFlowUndo] = useState<{ messageId: string; state: TemplateEditorState } | null>(null)
   const [flowOpen, setFlowOpen] = useState(false)
-  const [carried, setCarried] = useState<string | null>(null)
+  const [carried, setCarried] = useState<FlowHandoff | null>(null)
 
   // A request made from a workspace page opens Flow here and carries on.
   useFlowHandoff((request) => {
@@ -163,13 +168,13 @@ export function TemplateEditor({
   const [asking, setAsking] = useState(false)
   const [savedState, setSavedState] = useState(initial)
   const [, startTransition] = useTransition()
+  const router = useRouter()
+  // Templates have no PDF of their own yet, so they export as Word.
+  const exports = exportLinks(`/api/templates/${encodeURIComponent(template.id)}`, { pdf: false })
   const revisionRef = useRef(template.revision)
   const isDraft = template.status === "draft"
-  const quality = useMemo(
-    () => evaluateTemplateQuality({ content, description: state.description, title: state.title }),
-    [content, state.description, state.title]
-  )
-  const validationErrors = quality.issues.filter(isTemplateQualityIssueSaveBlocking).length
+  const quality = useTemplateQuality(content, state.description, state.title)
+  const validationErrors = quality?.blocking ?? 0
   const controller = useEditorController({
     change: (update, coalesceKey) =>
       history.set((current) => ({ ...current, content: update(current.content as TemplateContentV3) }), coalesceKey),
@@ -189,8 +194,10 @@ export function TemplateEditor({
     [content, proposal]
   )
   const preview = useEditorController({ change: () => undefined, content: candidate, undo: () => undefined })
+  // Only a draft saves on its own, and only while its checks pass.
+  const autosaves = !live.session && live.unavailable && isDraft && quality !== null && validationErrors === 0
   const autosave = useAutosave<TemplateEditorState>({
-    enabled: !live.session && live.unavailable && isDraft && validationErrors === 0,
+    enabled: autosaves,
     initialVersion: String(template.revision),
     save: async (value, version) => {
       const result = await saveDraftAction(toDraftInput(template.id, Number(version), value))
@@ -241,6 +248,11 @@ export function TemplateEditor({
       return true
     }
 
+    if (quality === null) {
+      bizflowToast.info("Checking the template. Try again in a moment.")
+      return true
+    }
+
     if (!quality.summary.isBlocking) {
       return false
     }
@@ -288,6 +300,11 @@ export function TemplateEditor({
       return
     }
 
+    if (quality === null) {
+      bizflowToast.info("Checking the template. Try again in a moment.")
+      return
+    }
+
     if (validationErrors > 0) {
       bizflowToast.error(`Fix ${validationErrors} ${validationErrors === 1 ? "check" : "checks"} before you save.`)
       return
@@ -320,7 +337,25 @@ export function TemplateEditor({
     return true
   }
 
-  function stageProposal(next: TemplateFlowProposal): void {
+  // A filled copy is made of the template as saved, so what is on screen
+  // saves first, but never past what saving would do on its own.
+  async function readyToFill(): Promise<string | null> {
+    const refusal = whyNotFill({ content, title: state.title }, { checking: quality === null, problems: validationErrors, unsavedByChoice: unsaved && !autosaves })
+
+    if (refusal) {
+      return refusal
+    }
+
+    const saved = live.session ? await live.session.flush() : autosaves ? await autosave.flush() : !liveMode
+
+    return saved ? null : "Your latest changes aren't saved yet. Try again in a moment."
+  }
+
+  // The message that brought the proposal, so applying from the banner is the same as from Flow.
+  const proposalMessage = useRef("")
+
+  function stageProposal(next: TemplateFlowProposal, messageId: string): void {
+    proposalMessage.current = messageId
     setProposal(next)
     controller.select(null)
   }
@@ -361,7 +396,7 @@ export function TemplateEditor({
       label: "Brand",
     },
     {
-      badge: quality.summary.criticalCount || undefined,
+      badge: quality?.summary.criticalCount || undefined,
       content: (close) => (
         <TemplateChecksPanel
           content={content}
@@ -463,7 +498,7 @@ export function TemplateEditor({
                 proposal.status === "stale"
                   ? [{ label: "Dismiss", onClick: () => setProposal(null) }]
                   : [
-                      ...(proposal.operations.length > 0 ? [{ label: "Apply", onClick: () => applyProposal(proposal, proposal.id) }] : []),
+                      ...(proposal.operations.length > 0 ? [{ label: "Apply", onClick: () => applyProposal(proposal, proposalMessage.current || proposal.id) }] : []),
                       { label: "Reject", onClick: () => setProposal(null) },
                     ]
               }
@@ -489,52 +524,56 @@ export function TemplateEditor({
           ) : null
         }
         layout={editorLayout}
-        menu={
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button aria-label="More" className="size-10" size="icon" title="More" type="button" variant="ghost">
-                  <MoreHorizontal />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onClick={() => setDetailsOpen(true)}>
-                <FilePenLine />
-                Details
-              </DropdownMenuItem>
-              {template.status === "published" ? (
-                <>
-                  <DropdownMenuItem onClick={() => setAsking(true)}>
-                    <Send />
-                    Send to answer…
-                  </DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/templates/${template.id}/links`} />}>
-                    <Link2 />
-                    Public links
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-              {/* Whoever can open the editor can edit the template, which is what sharing it takes. */}
-              <DropdownMenuItem onClick={() => setSharing(true)}>
-                <UserPlus />
-                Share…
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  const formData = new FormData()
-                  formData.set("templateId", template.id)
-                  startTransition(() => archiveAction(formData))
-                }}
-                variant="destructive"
-              >
-                <Archive />
-                Archive
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        }
+        menu={(narrow) => (
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button aria-label="More" className="size-10" size="icon" title="More" type="button" variant="ghost">
+                    <MoreHorizontal />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem onClick={() => setDetailsOpen(true)}>
+                  <FilePenLine />
+                  Details
+                </DropdownMenuItem>
+                {template.status === "published" ? (
+                  <>
+                    <DropdownMenuItem onClick={() => setAsking(true)}>
+                      <Send />
+                      Send to answer…
+                    </DropdownMenuItem>
+                    <DropdownMenuItem render={<Link href={`/templates/${template.id}/links`} />}>
+                      <Link2 />
+                      Public links
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+                {/* Whoever can open the editor can edit the template, which is what sharing it takes. */}
+                <DropdownMenuItem onClick={() => setSharing(true)}>
+                  <UserPlus />
+                  Share…
+                </DropdownMenuItem>
+                {narrow ? <ExportMenuItems heading links={exports} /> : null}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    const formData = new FormData()
+                    formData.set("templateId", template.id)
+                    startTransition(() => archiveAction(formData))
+                  }}
+                  variant="destructive"
+                >
+                  <Archive />
+                  Archive
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {narrow ? null : <ExportMenu links={exports} />}
+          </>
+        )}
         onRedo={history.redo}
         onRetrySave={() => void (live.session ? live.session.flush() : autosave.flush())}
         onSave={() => void save()}
@@ -583,6 +622,9 @@ export function TemplateEditor({
                   }
                 }}
                 autoSend={carried}
+                fill={{ action: (answers) => fillCopyAction(template.id, answers), open: (href) => router.push(href) }}
+                onSaveFirst={readyToFill}
+                organizationId={template.organizationId}
                 pendingProposal={proposal}
                 templateId={template.id}
               />
@@ -627,10 +669,13 @@ export function TemplateEditor({
             // The boxes take answers, so the author tries the form as they build it.
             fields={proposal ? "read" : "fill"}
             narrow={narrow}
-            onAnswerChange={(fieldKey, value) =>
-              setTestAnswers((answers) => applyVisibleTemplateFieldValue(content, answers, fieldKey, value))
+            onAnswerChange={(fieldKey, value, settle) =>
+              setTestAnswers((answers) => applyVisibleTemplateFieldValue(content, answers, fieldKey, value, settle))
             }
             overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={content} room={room} /> : null}
+            // Once the room's copy is on screen (or there is none), so the line
+            // the cursor starts in isn't swapped out from under it.
+            startTyping={startTyping && (liveMode || live.unavailable)}
             textEditable={editable && !proposal}
             zoom={zoom}
           />
@@ -657,7 +702,7 @@ export function TemplateEditor({
             <Field>
               <FieldLabel htmlFor="template-description">Description</FieldLabel>
               <textarea
-                className="min-h-24 w-full resize-y rounded-[8px] border border-input bg-card px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+                className="min-h-24 w-full resize-y rounded-md border border-input bg-card px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
                 id="template-description"
                 maxLength={2_000}
                 onChange={(event) =>
@@ -691,7 +736,7 @@ function TemplateVersions({
   return (
     <ul className="grid gap-1" data-slot="template-versions">
       {versions.map((version) => (
-        <li className="flex min-h-11 items-center gap-3 rounded-[8px] px-2 hover:bg-muted/60" key={version.revision}>
+        <li className="flex min-h-11 items-center gap-3 rounded-md px-2 hover:bg-muted/60" key={version.revision}>
           <span className="min-w-0 flex-1 truncate text-sm">
             {new Date(version.publishedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
           </span>
@@ -723,4 +768,31 @@ function stableJson(value: unknown): string {
       ? Object.fromEntries(Object.entries(entry).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)))
       : entry
   )
+}
+
+const loadQuality = () => import("@/services/templates/template-quality-service")
+
+/**
+ * The template's checks, worked out once the checker has loaded: it waits
+ * until after the page is drawn, so opening a template never waits on it.
+ * Until then there is nothing to say, and nothing saves.
+ *
+ * @returns The checks, or null while the checker loads.
+ */
+function useTemplateQuality(content: TemplateContentV3, description: string, title: string) {
+  const [checker, setChecker] = useState<Awaited<ReturnType<typeof loadQuality>> | null>(null)
+
+  useEffect(() => {
+    void loadQuality().then(setChecker)
+  }, [])
+
+  return useMemo(() => {
+    if (!checker) {
+      return null
+    }
+
+    const quality = checker.evaluateTemplateQuality({ content, description, title })
+
+    return { blocking: quality.issues.filter(checker.isTemplateQualityIssueSaveBlocking).length, summary: quality.summary }
+  }, [checker, content, description, title])
 }

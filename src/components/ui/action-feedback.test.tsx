@@ -74,6 +74,21 @@ describe("ActionFeedback", () => {
     )
   })
 
+  it("counts a quiet outcome but shows no toast over the page that already says it, and keeps that page's own marker", async () => {
+    navigation.pathname = "/templates/t1/edit"
+    navigation.query = "new=1&feedback=template_created"
+    window.history.replaceState(null, "", `/templates/t1/edit?${navigation.query}`)
+
+    await renderFeedback()
+
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(trackEvent).toHaveBeenCalledExactlyOnceWith("template_created", {
+      outcomeCode: "template_created",
+      route: "/templates/t1/edit",
+    })
+    expect(navigation.replace).toHaveBeenCalledExactlyOnceWith("/templates/t1/edit?new=1", { scroll: false })
+  })
+
   it("silently consumes an edited code without displaying, tracking, or reflecting it", async () => {
     navigation.query =
       "view=active&feedback=EmailJS%20provider%20stack&folderId=folder-2"

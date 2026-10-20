@@ -81,10 +81,11 @@ export async function createDocumentReplacementUploadUrl(
         )
       }
 
-      // A generated document's versions are its finalized paper alone.
-      if (document.sourceKind === "generated") {
+      // A generated document's versions are its finalized paper alone, and a
+      // sheet's cells live in the document itself.
+      if (document.sourceKind !== "upload") {
         throw new DocumentServiceError(
-          "A generated document cannot take an uploaded file.",
+          "Only an uploaded file can take a new upload.",
           409
         )
       }

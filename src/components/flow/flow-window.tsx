@@ -1,7 +1,8 @@
 "use client"
 
-import { X } from "lucide-react"
-import { type CSSProperties, type ReactElement, type ReactNode, useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
+import { Maximize2, X } from "lucide-react"
+import Link from "next/link"
+import { type CSSProperties, type ReactElement, type ReactNode, startTransition, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
 
 import { CORNERS, FACETS, FLAP, type Point, type Tone } from "@/components/brand/folded-page"
@@ -31,8 +32,8 @@ const DOT_TONES: readonly Tone[] = ["lavender", "lavender", "lavender", "lavende
 const SMALLEST = { h: 380, w: 320 }
 // Flow's message box, one line tall and growing with the message to about
 // six, and its send button inside it; the same wherever Flow is asked.
-export const FLOW_COMPOSER = "field-sizing-content max-h-36 min-h-10 w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 pr-12 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-export const FLOW_SEND = "absolute right-1.5 bottom-1 grid size-8 place-items-center max-md:size-11 rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
+export const FLOW_COMPOSER = "block field-sizing-content max-h-36 min-h-10 max-md:min-h-12 max-md:py-3.5 w-full resize-none rounded-lg border border-border bg-card px-3 py-2.5 pr-12 max-md:pr-14 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+export const FLOW_SEND = "absolute right-1.5 bottom-1 max-md:bottom-0.5 grid size-8 place-items-center max-md:size-11 rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
 const SMALLEST_ON_PHONE = 280
 const PHONE = "(width < 48rem)"
 const KEPT = "bizflow:flow:"
@@ -52,7 +53,7 @@ const easeOut = (q: number): number => 1 - (1 - q) ** 3
 const easeInOut = (q: number): number => (q < 0.5 ? 4 * q ** 3 : 1 - (-2 * q + 2) ** 3 / 2)
 
 // Every piece of the page, the fold last, with the way out from the page's middle.
-const PIECES = [
+export const PIECES = [
   ...FACETS.map((facet) => ({ flap: false, points: facet.corners.map((corner) => CORNERS[corner]), strength: facet.strength, tone: facet.tones[0] })),
   { flap: true, points: [...FLAP], strength: 1, tone: "wisteria" as const },
 ].map((piece) => {
@@ -265,7 +266,9 @@ function animate(parts: Parts): {
   let box: Rect = { h: 0, w: 0, x: 0, y: 0 }
   let mode: Mode = "closed"
   let wanted = false
-  let trip: { clicked: number; start: number; total: number; unfold: [number, number] } | null = null
+  // `begun` is false until the first frame draws it: the clock starts there, not
+  // at the click, so time spent setting up never shows as a jump into the trip.
+  let trip: { begun: boolean; clicked: number; start: number; total: number; unfold: [number, number] } | null = null
   let drag: { id: number; moved: boolean; start: Spot; from: Spot } | null = null
   let glide: { to: Spot; vx: number; vy: number } | null = null
   let moving: { grab: boolean; id: number; moved: boolean; start: Spot; from: Rect } | null = null
@@ -285,6 +288,7 @@ function animate(parts: Parts): {
   // And each particle its own start and pace between the swarm and the page.
   const specks = makeSpecks(parts.dots).map((speck) => ({ ...speck, go: 0, travel: 0 }))
   const tints = new Map<Tone, string>()
+  let tintTheme: string | null = null
   let paint: CanvasRenderingContext2D | null = null
   // Two endless sways per dot, across its orbit and down it. Asked for less
   // motion, or where nothing can animate (a test's page), the swarm holds still where it starts.
@@ -362,7 +366,7 @@ function animate(parts: Parts): {
         angle: between(-0.5, 0.5),
         blend: between(0.25, 0.85),
         bow: either() * between(10, 34),
-        delay: between(0, 110),
+        delay: between(0, opening ? 110 : 60),
         dur: between(430, 600),
         part: between(6, 18),
         turn: either() * between(6, 18),
@@ -386,8 +390,9 @@ function animate(parts: Parts): {
     const trips = pieces.map((piece) => piece.trip)
     const folded = Math.max(...trips.map(landing))
     trip = {
+      begun: false,
       clicked: now,
-      start: now + (opening ? 0 : 90) - (still ? 1e6 : 0),
+      start: now - (still ? 1e6 : 0),
       total: Math.max(folded, ...specks.map(({ go, travel }) => go + travel)),
       // While the page itself unfolds or folds: the window's fade, edge and lift follow it.
       unfold: [opening ? Math.min(...trips.map((piece) => piece.delay)) : 0, folded],
@@ -400,7 +405,7 @@ function animate(parts: Parts): {
     if (opening) {
       for (const animation of motion) animation.pause()
     }
-    parts.hit.hidden = true
+    away(parts.hit, true)
     showSpecks()
     parts.setMode(next)
     kick()
@@ -408,21 +413,42 @@ function animate(parts: Parts): {
 
   // The particles' canvas, sized to the screen, with the swarm's tones as it needs them.
   function showSpecks(): void {
-    paint ??= still ? null : parts.specks.getContext("2d")
-
-    if (!paint) return
-
-    const dpr = devicePixelRatio || 1
-    parts.specks.width = Math.round(view.w * dpr)
-    parts.specks.height = Math.round(view.h * dpr)
-    paint.setTransform(dpr, 0, 0, dpr, 0, 0)
-
-    for (const tone of new Set(DOT_TONES)) {
-      parts.specks.style.color = DOT_FILL(tone)
-      tints.set(tone, getComputedStyle(parts.specks).color)
-    }
+    if (!readySpecks()) return
 
     parts.specks.hidden = false
+  }
+
+  // Context, size and tones, ready before they are needed.
+  function readySpecks(): boolean {
+    paint ??= still ? null : parts.specks.getContext("2d")
+
+    if (!paint) return false
+
+    // Resizing a canvas clears and reallocates it, a phone's at three times
+    // the screen, so it happens only when the screen itself changed.
+    const dpr = devicePixelRatio || 1
+    const width = Math.round(view.w * dpr)
+    const height = Math.round(view.h * dpr)
+
+    if (parts.specks.width !== width || parts.specks.height !== height) {
+      parts.specks.width = width
+      parts.specks.height = height
+      paint.setTransform(dpr, 0, 0, dpr, 0, 0)
+    }
+
+    // Read back only when the theme has changed: each read forces the page's styles to settle.
+    const theme = document.documentElement.className
+
+    if (theme !== tintTheme) {
+      tintTheme = theme
+      tints.clear()
+      for (const tone of new Set(DOT_TONES)) {
+        parts.specks.style.color = DOT_FILL(tone)
+        tints.set(tone, getComputedStyle(parts.specks).color)
+      }
+    }
+
+    return true
   }
 
   function want(open: boolean): void {
@@ -446,7 +472,7 @@ function animate(parts: Parts): {
     mode = closed ? "closed" : "open"
     parts.setMode(mode)
     // Swapped at once, not when React next draws, so nothing blinks between the dots and the swarm.
-    parts.hit.hidden = !closed
+    away(parts.hit, !closed)
     parts.specks.hidden = true
     parts.win.style.opacity = closed ? "0" : "1"
     parts.win.style.transform = ""
@@ -578,6 +604,13 @@ function animate(parts: Parts): {
     frame = 0
     const dt = Math.min(0.032, last ? (now - last) / 1000 : 0.016)
     last = now
+
+    if (trip && !trip.begun) {
+      const late = Math.max(0, now - trip.clicked)
+      trip.begun = true
+      trip.clicked += late
+      trip.start += late
+    }
     const again = stepGlide(dt)
     const t = trip ? now - trip.start : 0
     const [from, to] = trip?.unfold ?? [0, 1]
@@ -643,7 +676,8 @@ function animate(parts: Parts): {
     }
 
     // The page's lift, which grows into the window's as the pieces become it.
-    const k = mode === "open" ? 1 : mode === "opening" ? easeInOut(T) : mode === "closing" ? 1 - easeInOut(T) : 0
+    // A phone draws SVG blur in software, so its lift changes only once a trip is over, never per frame.
+    const k = mode === "open" || (phone && mode === "closing") ? 1 : phone ? 0 : mode === "opening" ? easeInOut(T) : mode === "closing" ? 1 - easeInOut(T) : 0
     const dark = document.documentElement.classList.contains("dark") ? 2.4 : 1
     const lift = [5 + 13 * k, 4.5 + 15.5 * k, Math.min(0.6, (0.22 - 0.06 * k) * dark)]
     const key = lift.map((value) => value.toFixed(2)).join()
@@ -736,6 +770,7 @@ function animate(parts: Parts): {
       return
     }
 
+    want(true)
     parts.toggle(true)
   }
   const onKey = (event: KeyboardEvent): void => {
@@ -745,6 +780,7 @@ function animate(parts: Parts): {
     if (event.key === "Escape" && (mode === "open" || mode === "opening") && (parts.win.contains(focus) || focus === document.body || focus === null)) {
       event.preventDefault()
       returnFocus = true
+      want(false)
       parts.toggle(false)
     }
   }
@@ -762,7 +798,7 @@ function animate(parts: Parts): {
     const target = event.target as Element
     const grab = parts.grab.contains(target)
 
-    if (mode !== "open" || event.button !== 0 || (target.closest("button") && !grab)) return
+    if (mode !== "open" || event.button !== 0 || (target.closest("a, button") && !grab)) return
 
     parts.head.setPointerCapture?.(event.pointerId)
     moving = { from: { ...box }, grab, id: event.pointerId, moved: false, start: { x: event.clientX, y: event.clientY } }
@@ -832,7 +868,9 @@ function animate(parts: Parts): {
     const side = sideOf(button.x, view.w)
     view = { h: innerHeight, w: innerWidth }
     phone = phoneQuery.matches
-    button = { x: edge(side), y: clampTop(button.y) }
+    // From where it was left, not where the last squeeze pushed it, so a
+    // phone's toolbar hiding again gives it its place back.
+    button = { x: edge(side), y: clampTop(read<{ top: number }>("place")?.top ?? Infinity) }
 
     if (mode !== "closed") {
       box = phone ? windowBox() : { ...box, h: Math.min(box.h, view.h - 24), w: Math.min(box.w, view.w - 24) }
@@ -842,6 +880,16 @@ function animate(parts: Parts): {
 
     place()
     kick()
+  }
+
+  // A toolbar the button rests in moves as the page scrolls, bounces at its
+  // ends, or a phone's own bars come and go; the button follows each frame.
+  let following = 0
+  const onScroll = (): void => {
+    if (slot && mode === "closed") following ||= requestAnimationFrame(() => {
+      following = 0
+      place()
+    })
   }
 
   const listeners: Array<[EventTarget, string, EventListener]> = [
@@ -859,13 +907,19 @@ function animate(parts: Parts): {
     [parts.head, "pointerup", onHeadUp as EventListener],
     [parts.head, "pointercancel", onHeadUp as EventListener],
     [window, "resize", onResize],
+    [window, "scroll", onScroll],
     // A phone's keyboard moves the toolbar the button may rest in.
-    ...(window.visualViewport ? [[window.visualViewport, "resize", onResize] as [EventTarget, string, EventListener]] : []),
+    ...(window.visualViewport
+      ? [[window.visualViewport, "resize", onResize] as [EventTarget, string, EventListener], [window.visualViewport, "scroll", onScroll] as [EventTarget, string, EventListener]]
+      : []),
   ]
 
   listeners.forEach(([target, type, listener]) => target.addEventListener(type, listener))
+  // The window is laid out, unseen, before it is first asked for, so opening it only moves it.
+  box = windowBox()
   place()
   kick()
+  const warm = (window.requestIdleCallback ?? ((task: () => void) => window.setTimeout(task, 200)))(() => void readySpecks())
 
   return {
     dockTo(next) {
@@ -877,15 +931,24 @@ function animate(parts: Parts): {
       place()
     },
     stop() {
+      ;(window.cancelIdleCallback ?? window.clearTimeout)(warm)
       slotWatch?.disconnect()
       for (const animation of motion) animation.cancel()
       cancelAnimationFrame(frame)
       cancelAnimationFrame(heightChange.frame)
+      cancelAnimationFrame(following)
       listeners.forEach(([target, type, listener]) => target.removeEventListener(type, listener))
     },
     resize,
     want,
   }
+}
+
+// Out of sight and reach while the window is open, but still drawn: WebKit can
+// drop the swarm's animations from an element it stopped drawing (display: none).
+function away(element: HTMLElement, gone: boolean): void {
+  element.inert = gone
+  element.style.visibility = gone ? "hidden" : ""
 }
 
 // How much of the bottom a phone keeps for its home bar.
@@ -899,7 +962,7 @@ function readSafeBottom(): number {
   return height
 }
 
-const PIECE_STYLE = (tone: string, strength: number): CSSProperties =>
+export const PIECE_STYLE = (tone: string, strength: number): CSSProperties =>
   ({
     fill: `color-mix(in oklch, var(--fold-${tone}) calc(var(--s, 1) * ${strength} * var(--fold-strength) * 100%), var(--popover))`,
     stroke: "var(--fold-seam)",
@@ -931,11 +994,14 @@ const QUIET_SCROLL = "[&_*]:[scrollbar-width:none] [&_*::-webkit-scrollbar]:hidd
  */
 export function FlowWindow({
   children,
+  expandHref,
   onOpenChange,
   open,
   phoneBottom = 16,
 }: {
   children: ReactNode
+  /** A page with room for the whole conversation, if there is one. */
+  expandHref?: string
   onOpenChange: (open: boolean) => void
   open: boolean
   phoneBottom?: number
@@ -982,7 +1048,8 @@ export function FlowWindow({
       shadow: shadow.current,
       specks: specks.current,
       swarm: swarm.current,
-      toggle: (next) => latest.current.onOpenChange(next),
+      // The engine has started already; the page around it may take its time to draw.
+      toggle: (next) => startTransition(() => latest.current.onOpenChange(next)),
       win: win.current,
     })
     engine.current = running
@@ -997,7 +1064,8 @@ export function FlowWindow({
     engine.current?.dockTo(dock)
   }, [dock, mounted])
 
-  useEffect(() => {
+  // Before the browser paints, so a close starts in the frame it was asked for.
+  useLayoutEffect(() => {
     engine.current?.want(open)
   }, [mounted, open])
 
@@ -1032,7 +1100,9 @@ export function FlowWindow({
         aria-labelledby={titleId}
         className="fixed z-40 flex flex-col text-popover-foreground"
         data-slot="flow-window"
-        hidden={mode === "closed"}
+        // Unseen yet laid out while shut, so opening it only shows it.
+        inert={mode === "closed"}
+        style={mode === "closed" ? { visibility: "hidden" } : undefined}
         id={windowId}
         ref={win}
         role="dialog"
@@ -1043,7 +1113,7 @@ export function FlowWindow({
         >
           <button
             aria-label="Resize Flow"
-            className="absolute top-0 left-1/2 hidden h-6 w-18 -translate-x-1/2 cursor-ns-resize touch-none rounded-[12px] outline-none before:absolute before:top-[7px] before:left-4 before:h-[5px] before:w-10 before:rounded-full before:bg-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-ring/40 max-md:block"
+            className="absolute top-0 left-1/2 hidden h-6 w-18 -translate-x-1/2 cursor-ns-resize touch-none rounded-lg outline-none before:absolute before:top-[7px] before:left-4 before:h-[5px] before:w-10 before:rounded-full before:bg-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-ring/40 max-md:block"
             ref={grab}
             title="Drag or tap to resize"
             type="button"
@@ -1051,11 +1121,24 @@ export function FlowWindow({
           <h2 className="text-[15px] font-semibold" id={titleId}>
             Flow
           </h2>
+          {expandHref ? (
+            <Link
+              aria-label="Open in Flow tab"
+              className="mr-7 ml-auto grid size-8 place-items-center rounded-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 max-md:mr-9 max-md:size-10"
+              href={expandHref}
+              title="Open in Flow tab"
+            >
+              <Maximize2 aria-hidden="true" className="size-4" />
+            </Link>
+          ) : null}
           {/* The page's folded corner is the way to close it. */}
           <button
             aria-label="Close Flow"
             className="absolute top-0 right-0 size-[34px] text-secondary-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 max-md:size-10"
-            onClick={() => latest.current.onOpenChange(false)}
+            onClick={() => {
+              engine.current?.want(false)
+              startTransition(() => latest.current.onOpenChange(false))
+            }}
             type="button"
           >
             <X aria-hidden="true" className="absolute top-[calc(70%-6px)] left-[calc(30%-6px)] size-3 stroke-2" />
@@ -1078,9 +1161,8 @@ export function FlowWindow({
         aria-controls={windowId}
         aria-haspopup="dialog"
         aria-label="Flow"
-        className="group fixed top-0 left-0 z-40 cursor-pointer touch-none rounded-[12px] outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="group fixed top-0 left-0 z-40 cursor-pointer touch-none rounded-lg outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-ring/40"
         data-slot="flow-launcher"
-        hidden={mode !== "closed"}
         ref={hit}
         style={{ height: PAGE.h + REACH.y * 2, width: PAGE.w + REACH.x * 2 }}
         type="button"

@@ -384,8 +384,56 @@ export type Database = {
           },
         ]
       }
+      document_signed_copy_links: {
+        Row: {
+          created_at: string
+          document_id: string
+          email: string
+          expires_at: string
+          id: string
+          org_id: string
+          token_hash: string
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          email: string
+          expires_at?: string
+          id?: string
+          org_id: string
+          token_hash: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          org_id?: string
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_signed_copy_links_document_org_fkey"
+            columns: ["document_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "document_signed_copy_links_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_signing_recipients: {
         Row: {
+          consented_at: string | null
+          decline_reason: string | null
+          declined_at: string | null
           document_id: string
           email: string
           id: string
@@ -394,8 +442,11 @@ export type Database = {
           name: string
           org_id: string
           requires_signature: boolean
+          revoked_at: string | null
+          sent_by: string | null
           signature_data: Json | null
           signed_at: string | null
+          signed_ip: string | null
           signer_number: number
           status: string
           token_expires_at: string
@@ -404,6 +455,9 @@ export type Database = {
           viewed_at: string | null
         }
         Insert: {
+          consented_at?: string | null
+          decline_reason?: string | null
+          declined_at?: string | null
           document_id: string
           email: string
           id?: string
@@ -412,8 +466,11 @@ export type Database = {
           name: string
           org_id: string
           requires_signature?: boolean
+          revoked_at?: string | null
+          sent_by?: string | null
           signature_data?: Json | null
           signed_at?: string | null
+          signed_ip?: string | null
           signer_number: number
           status?: string
           token_expires_at: string
@@ -422,6 +479,9 @@ export type Database = {
           viewed_at?: string | null
         }
         Update: {
+          consented_at?: string | null
+          decline_reason?: string | null
+          declined_at?: string | null
           document_id?: string
           email?: string
           id?: string
@@ -430,8 +490,11 @@ export type Database = {
           name?: string
           org_id?: string
           requires_signature?: boolean
+          revoked_at?: string | null
+          sent_by?: string | null
           signature_data?: Json | null
           signed_at?: string | null
+          signed_ip?: string | null
           signer_number?: number
           status?: string
           token_expires_at?: string
@@ -452,6 +515,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_signing_recipients_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -530,12 +600,15 @@ export type Database = {
           description: string | null
           id: string
           org_id: string
+          pre_trash_status: string | null
           published_at: string | null
           published_by: string | null
           published_revision: number | null
           revision: number
           status: string
           title: string
+          trashed_at: string | null
+          trashed_by: string | null
           updated_at: string
           updated_by: string | null
         }
@@ -550,12 +623,15 @@ export type Database = {
           description?: string | null
           id?: string
           org_id: string
+          pre_trash_status?: string | null
           published_at?: string | null
           published_by?: string | null
           published_revision?: number | null
           revision?: number
           status?: string
           title: string
+          trashed_at?: string | null
+          trashed_by?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -570,12 +646,15 @@ export type Database = {
           description?: string | null
           id?: string
           org_id?: string
+          pre_trash_status?: string | null
           published_at?: string | null
           published_by?: string | null
           published_revision?: number | null
           revision?: number
           status?: string
           title?: string
+          trashed_at?: string | null
+          trashed_by?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -614,6 +693,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "document_template_versions"
             referencedColumns: ["org_id", "template_id", "revision"]
+          },
+          {
+            foreignKeyName: "document_templates_trashed_by_fkey"
+            columns: ["trashed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "document_templates_updated_by_fkey"
@@ -701,6 +787,8 @@ export type Database = {
         Row: {
           archived_at: string | null
           archived_by: string | null
+          conversion_error: string | null
+          conversion_state: string | null
           created_at: string
           created_by: string | null
           current_version_id: string | null
@@ -709,11 +797,13 @@ export type Database = {
           id: string
           lifecycle_state: Database["public"]["Enums"]["resource_lifecycle_state"]
           org_id: string
+          original_version_id: string | null
           pre_trash_lifecycle_state:
             | Database["public"]["Enums"]["resource_lifecycle_state"]
             | null
           purge_after: string | null
           share_inherit: boolean
+          sheet_content: Json | null
           source_kind: string
           template_id: string | null
           template_revision: number | null
@@ -728,6 +818,8 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           archived_by?: string | null
+          conversion_error?: string | null
+          conversion_state?: string | null
           created_at?: string
           created_by?: string | null
           current_version_id?: string | null
@@ -736,11 +828,13 @@ export type Database = {
           id?: string
           lifecycle_state?: Database["public"]["Enums"]["resource_lifecycle_state"]
           org_id: string
+          original_version_id?: string | null
           pre_trash_lifecycle_state?:
             | Database["public"]["Enums"]["resource_lifecycle_state"]
             | null
           purge_after?: string | null
           share_inherit?: boolean
+          sheet_content?: Json | null
           source_kind?: string
           template_id?: string | null
           template_revision?: number | null
@@ -755,6 +849,8 @@ export type Database = {
         Update: {
           archived_at?: string | null
           archived_by?: string | null
+          conversion_error?: string | null
+          conversion_state?: string | null
           created_at?: string
           created_by?: string | null
           current_version_id?: string | null
@@ -763,11 +859,13 @@ export type Database = {
           id?: string
           lifecycle_state?: Database["public"]["Enums"]["resource_lifecycle_state"]
           org_id?: string
+          original_version_id?: string | null
           pre_trash_lifecycle_state?:
             | Database["public"]["Enums"]["resource_lifecycle_state"]
             | null
           purge_after?: string | null
           share_inherit?: boolean
+          sheet_content?: Json | null
           source_kind?: string
           template_id?: string | null
           template_revision?: number | null
@@ -814,6 +912,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_original_version_id_document_id_fkey"
+            columns: ["original_version_id", "id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id", "document_id"]
           },
           {
             foreignKeyName: "documents_template_id_org_id_fkey"
@@ -1239,11 +1344,93 @@ export type Database = {
           },
         ]
       }
+      org_unit_members: {
+        Row: {
+          created_at: string
+          is_lead: boolean
+          org_id: string
+          unit_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          is_lead?: boolean
+          org_id: string
+          unit_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          is_lead?: boolean
+          org_id?: string
+          unit_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_unit_members_member_fkey"
+            columns: ["org_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "organization_memberships"
+            referencedColumns: ["org_id", "user_id"]
+          },
+          {
+            foreignKeyName: "org_unit_members_unit_fkey"
+            columns: ["org_id", "unit_id"]
+            isOneToOne: false
+            referencedRelation: "org_units"
+            referencedColumns: ["org_id", "id"]
+          },
+        ]
+      }
+      org_units: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          org_id: string
+          parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          org_id: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          org_id?: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_units_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_units_parent_fkey"
+            columns: ["org_id", "parent_id"]
+            isOneToOne: false
+            referencedRelation: "org_units"
+            referencedColumns: ["org_id", "id"]
+          },
+        ]
+      }
       organization_memberships: {
         Row: {
           created_at: string
           email_notifications_enabled: boolean
           id: string
+          manager_user_id: string | null
           navigation_order: string[]
           org_id: string
           role: Database["public"]["Enums"]["organization_role"]
@@ -1258,6 +1445,7 @@ export type Database = {
           created_at?: string
           email_notifications_enabled?: boolean
           id?: string
+          manager_user_id?: string | null
           navigation_order?: string[]
           org_id: string
           role: Database["public"]["Enums"]["organization_role"]
@@ -1272,6 +1460,7 @@ export type Database = {
           created_at?: string
           email_notifications_enabled?: boolean
           id?: string
+          manager_user_id?: string | null
           navigation_order?: string[]
           org_id?: string
           role?: Database["public"]["Enums"]["organization_role"]
@@ -1283,6 +1472,13 @@ export type Database = {
           workspace_display_name?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "organization_memberships_manager_fkey"
+            columns: ["org_id", "manager_user_id"]
+            isOneToOne: false
+            referencedRelation: "organization_memberships"
+            referencedColumns: ["org_id", "user_id"]
+          },
           {
             foreignKeyName: "organization_memberships_org_id_fkey"
             columns: ["org_id"]
@@ -1316,6 +1512,7 @@ export type Database = {
           permissions: string[] | null
           system_key: Database["public"]["Enums"]["organization_role"] | null
           updated_at: string
+          visibility_scope: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -1326,6 +1523,7 @@ export type Database = {
           permissions?: string[] | null
           system_key?: Database["public"]["Enums"]["organization_role"] | null
           updated_at?: string
+          visibility_scope?: string | null
         }
         Update: {
           archived_at?: string | null
@@ -1336,6 +1534,7 @@ export type Database = {
           permissions?: string[] | null
           system_key?: Database["public"]["Enums"]["organization_role"] | null
           updated_at?: string
+          visibility_scope?: string | null
         }
         Relationships: [
           {
@@ -1425,6 +1624,7 @@ export type Database = {
           document_id: string | null
           expires_at: string | null
           id: string
+          label: string | null
           max_submissions: number | null
           org_id: string
           recipient_email: string | null
@@ -1446,6 +1646,7 @@ export type Database = {
           document_id?: string | null
           expires_at?: string | null
           id?: string
+          label?: string | null
           max_submissions?: number | null
           org_id: string
           recipient_email?: string | null
@@ -1467,6 +1668,7 @@ export type Database = {
           document_id?: string | null
           expires_at?: string | null
           id?: string
+          label?: string | null
           max_submissions?: number | null
           org_id?: string
           recipient_email?: string | null
@@ -3120,6 +3322,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cancel_document_signing: {
+        Args: { target_document_id: string; target_org_id: string }
+        Returns: {
+          email: string
+          id: string
+          name: string
+          status: string
+        }[]
+      }
       compact_working_copy_room: {
         Args: {
           target_org_id: string
@@ -3131,8 +3342,11 @@ export type Database = {
       }
       complete_document_recipient_signature: {
         Args: {
+          target_consented?: boolean
           target_document_id: string
+          target_expected_values?: Json
           target_initials_data: Json
+          target_ip?: string
           target_org_id: string
           target_recipient_id: string
           target_signature_data: Json
@@ -3317,6 +3531,21 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      decline_document_signing: {
+        Args: {
+          target_document_id: string
+          target_org_id: string
+          target_reason: string
+          target_recipient_id: string
+          target_token_hash: string
+        }
+        Returns: {
+          email: string
+          id: string
+          name: string
+          status: string
+        }[]
       }
       dismiss_submission_changes_request: {
         Args: {
@@ -3584,9 +3813,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      member_reach: {
+        Args: { target_org_id: string; target_user_id: string }
+        Returns: Json
+      }
       merge_generated_document_answers: {
         Args: {
           target_document_id: string
+          target_expected_values?: Json
           target_org_id: string
           target_values: Json
         }
@@ -3623,6 +3857,19 @@ export type Database = {
           target_pdf_sha256: string
         }
         Returns: string
+      }
+      purge_due_trashed_document_templates: {
+        Args: { target_limit: number }
+        Returns: number
+      }
+      purge_trashed_document_template: {
+        Args: {
+          target_actor_user_id: string
+          target_confirmation_title: string
+          target_org_id: string
+          target_template_id: string
+        }
+        Returns: undefined
       }
       record_internal_submission_file_upload_window: {
         Args: {
@@ -4064,6 +4311,10 @@ export type Database = {
       validate_internal_submission_values: {
         Args: { target_template_snapshot: Json; target_values: Json }
         Returns: undefined
+      }
+      visible_member_ids: {
+        Args: { target_org_id: string; target_user_id: string }
+        Returns: string[]
       }
     }
     Enums: {

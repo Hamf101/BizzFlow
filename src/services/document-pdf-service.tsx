@@ -3,7 +3,7 @@ import { createPdfPagePlans } from "./document-pdf/planner"
 import { renderPdfLibDocument } from "./document-pdf/pdf-lib-renderer"
 import { normalizePdfInput } from "./document-pdf/shared"
 import type { PdfLibRenderContext } from "./document-pdf/pdf-lib-types"
-import type { RenderGeneratedDocumentPdfInput } from "./document-pdf/types"
+import type { NormalizedPdfInput, PdfPagePlan, RenderGeneratedDocumentPdfInput } from "./document-pdf/types"
 
 export { DocumentPdfServiceError } from "./document-pdf/errors"
 
@@ -28,14 +28,33 @@ export async function renderGeneratedDocumentPdf(
   input: RenderGeneratedDocumentPdfInput,
   options: RenderGeneratedDocumentPdfOptions = {}
 ): Promise<Buffer> {
+  return renderPlannedDocument("pdf", "a PDF", input, options, (normalized, pages) => renderPdfLibDocument(normalized, pages, options))
+}
+
+/**
+ * Validates a document, plans its pages as the PDF does, and writes them in
+ * one format, logging how long it took; anything unexpected becomes a safe 500.
+ *
+ * @param format - The format's name in logs.
+ * @param asWhat - The format in the error a reader sees, such as "a PDF".
+ * @param render - Writes the planned pages.
+ * @throws DocumentPdfServiceError when validation or rendering fails.
+ */
+export async function renderPlannedDocument(
+  format: string,
+  asWhat: string,
+  input: RenderGeneratedDocumentPdfInput,
+  options: RenderGeneratedDocumentPdfOptions,
+  render: (input: NormalizedPdfInput, pages: PdfPagePlan[]) => Promise<Buffer>
+): Promise<Buffer> {
   const startedAt = performance.now()
 
   try {
-    const normalizedInput = normalizePdfInput(input)
+    const normalizedInput = normalizePdfInput(input, { fillable: options.fillable })
     const pages = createPdfPagePlans(normalizedInput)
-    const buffer = await renderPdfLibDocument(normalizedInput, pages, options)
+    const buffer = await render(normalizedInput, pages)
 
-    console.info("generated_document_pdf_rendered", {
+    console.info(`generated_document_${format}_rendered`, {
       documentId: input.documentId,
       byteSize: buffer.length,
       pageCount: pages.length,
@@ -47,13 +66,13 @@ export async function renderGeneratedDocumentPdf(
       throw error
     }
 
-    console.error("generated_document_pdf_render_failed", {
+    console.error(`generated_document_${format}_render_failed`, {
       documentId: input.documentId,
       durationMs: Math.round(performance.now() - startedAt),
-      reason: error instanceof Error ? error.message : "Unknown PDF render error",
+      reason: error instanceof Error ? error.message : `Unknown ${format.toUpperCase()} render error`,
     })
     throw new DocumentPdfServiceError(
-      "Unable to render this document as a PDF.",
+      `Unable to render this document as ${asWhat}.`,
       500
     )
   }

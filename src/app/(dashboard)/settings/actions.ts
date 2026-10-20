@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { z } from "zod"
+import * as z from "zod"
 
 import { getAuthenticatedUser } from "@/lib/auth"
 import {
@@ -13,13 +13,14 @@ import {
   buildFeedbackRedirect,
   type ActionFeedbackCode,
 } from "@/lib/action-result"
-import { runFormAction } from "@/lib/form-action"
+import { loadActionContextOrSignIn, runFormAction } from "@/lib/form-action"
 import { getFormString } from "@/lib/form-utils"
 import {
   updateOrganizationNotificationSettings,
 } from "@/services/notification-service"
 import {
   archiveOrganizationRole,
+  changeOrganizationStructure,
   createOrganizationRole,
   OrganizationServiceError,
   updateOrganizationRole,
@@ -280,4 +281,42 @@ function isRoleInUse(error: unknown): ActionFeedbackCode | undefined {
   return error instanceof OrganizationServiceError && error.statusCode === 409
     ? "role_in_use"
     : undefined
+}
+
+const id = z.string().uuid()
+const structureChangeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("save_unit"), unitId: id.optional(), name: z.string().max(200), parentId: id.nullable() }),
+  z.object({ kind: z.literal("delete_unit"), unitId: id }),
+  z.object({ kind: z.literal("set_unit_member"), unitId: id, userId: id, place: z.enum(["member", "lead"]).nullable() }),
+  z.object({ kind: z.literal("set_manager"), userId: id, managerUserId: id.nullable() }),
+  z.object({ kind: z.literal("set_role_scope"), roleId: id, scope: z.enum(["everyone", "branch", "inviter"]).nullable() }),
+])
+
+/** One change to the workspace's teams, reporting lines or a role's reach. */
+export type StructureChange = z.infer<typeof structureChangeSchema>
+
+/**
+ * Applies one change to the workspace's structure, for its owner.
+ *
+ * @param input - The change.
+ * @returns Why it was refused, in words for the owner; nothing when it worked.
+ */
+export async function changeStructureAction(input: StructureChange): Promise<{ error?: string }> {
+  const change = structureChangeSchema.safeParse(input)
+
+  if (!change.success) {
+    return { error: "That change could not be read. Reload and try again." }
+  }
+
+  const { actor } = await loadActionContextOrSignIn("/settings", "Create an organization first.")
+
+  try {
+    await changeOrganizationStructure({ ...actor, change: change.data })
+  } catch (error: unknown) {
+    return { error: error instanceof OrganizationServiceError && error.statusCode < 500 ? error.message : "That change did not save. Try again." }
+  }
+
+  revalidatePath("/settings")
+  revalidatePath("/people")
+  return {}
 }

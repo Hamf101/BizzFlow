@@ -18,6 +18,7 @@ export const TemplateBrandingPanel = dynamic(() => loadBranding().then((panel) =
 export const TemplateChecksPanel = dynamic(() => loadChecks().then((panel) => panel.TemplateChecksPanel))
 // Opened from a menu, so it loads when asked for.
 export const ShareDialog = dynamic(() => loadShare().then((panel) => panel.ShareDialog))
+export const DocumentRecipientCollection = dynamic(() => import("@/components/documents/document-recipient-collection").then((form) => form.DocumentRecipientCollection))
 export const SendToAnswerDialog = dynamic(() => import("@/components/sharing/send-to-answer-dialog").then((panel) => panel.SendToAnswerDialog))
 // What editing together shows, once a room is open.
 export const RoomCheckpoints = dynamic(() => loadRoom().then((room) => room.RoomCheckpoints))

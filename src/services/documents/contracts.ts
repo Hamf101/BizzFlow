@@ -3,6 +3,7 @@ import type {
   buildDocumentObjectKey,
   createSignedDocumentDownloadUrl,
   createSignedDocumentUploadUrl,
+  deleteDocumentStorageObject,
   validateDocumentUploadRequest,
   verifyDocumentUpload,
 } from "@/services/document-storage-service"
@@ -66,6 +67,8 @@ export type ListRecentDocumentsInput = {
   /** Only generated documents this member created, such as those they sent. */
   generatedBy?: string
   limit: number
+  /** What this member opened, last opened first, instead of what anyone changed last. */
+  openedBy?: string
 }
 
 export type ListDocumentCardsInput = {
@@ -75,6 +78,8 @@ export type ListDocumentCardsInput = {
   documentIds: readonly string[]
   /** The ones among them whose first page the view draws. */
   contentIds: readonly string[]
+  /** Whether to say what kind of file each upload is, which Files' menus need. */
+  withContentTypes?: boolean
 }
 
 export type GetDocumentDetailInput = {
@@ -161,4 +166,5 @@ export type DocumentServiceDeps = {
   createSignedDocumentUploadUrl?: typeof createSignedDocumentUploadUrl
   createSignedDocumentDownloadUrl?: typeof createSignedDocumentDownloadUrl
   verifyDocumentUpload?: typeof verifyDocumentUpload
+  deleteDocumentStorageObject?: typeof deleteDocumentStorageObject
 }

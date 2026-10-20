@@ -3,6 +3,7 @@
 import {
   ArrowDownToLine,
   ArrowRight,
+  FilePlus2,
   ArrowUp,
   AlertTriangle,
   Check,
@@ -29,12 +30,18 @@ import {
   useRef,
   useState
 } from "react"
-import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
-import { z } from "zod"
+import * as z from "zod"
 
+import { FLOW_COMPOSER_ATTACH, FlowAddButton, FlowAttachChip, RECREATE, useFlowAttachment } from "@/components/flow/flow-attach"
+import type { FlowHandoff, FlowSource } from "@/components/flow/flow-handoff"
+import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
+import { FlowMentionChips, type FlowMentionItem, useFlowMentions } from "@/components/flow/flow-mentions"
+import { FlowMessage, FlowWorking } from "@/components/flow/flow-message"
+import { FLOW_STREAM_HEADERS, readFlowTurn } from "@/components/flow/flow-stream"
 import { FLOW_COMPOSER, FLOW_SEND } from "@/components/flow/flow-window"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { bizflowToast } from "@/components/ui/toaster"
 import { cn } from "@/lib/utils"
 import { TEMPLATE_FLOW_OPERATION_TYPES } from "@/services/template-ai/flow-response-schema"
 import {
@@ -43,6 +50,7 @@ import {
 } from "@/services/template-flow-proposal-state"
 import { templateContentSchema } from "@/types/template"
 import type {
+  FlowFillResult,
   TemplateFlowDraft,
   TemplateFlowLedgerItem,
   TemplateFlowMessage,
@@ -52,6 +60,7 @@ import type {
   TemplateFlowResult,
   TemplateFlowWireOperation
 } from "@/types/template-flow"
+import type { FlowStage } from "@/services/template-flow/contracts"
 
 // The server bounds every AI call itself (two at most per turn), so this only
 // catches a connection that never answers, and must outlast the longest turn.
@@ -68,6 +77,9 @@ const TEMPLATE_STARTER: FlowStarter = {
 
 /** What an empty conversation offers: a line, a few first messages, and the box's hint. */
 export type FlowStarter = Readonly<{ heading: string; placeholder: string; prompts: readonly string[] }>
+
+// A pause this long between one author's messages starts a new run, which shows its time again.
+const RUN_BREAK_MS = 10 * 60_000
 
 /** A proposal as Flow made it, and the changes its reviewer dropped by hand. */
 type FlowReview = Readonly<{ original: TemplateFlowProposal; dropped: ReadonlySet<number> }>
@@ -90,14 +102,29 @@ type TemplateFlowPanelProps = {
   onUndo: () => void
   /** The proposal on show, which the editor owns so the page can preview it. */
   pendingProposal: TemplateFlowProposal | null
-  /** A request carried in from elsewhere, sent once when it arrives. */
-  autoSend?: string | null
+  /** A request carried in from elsewhere, sent once when it arrives, with the file it is about. */
+  autoSend?: FlowHandoff | null
   /** Where turns go; a document's Flow answers at its own route. */
   endpoint?: string
   /** The empty conversation's line and first messages, for what is open. */
   starter?: FlowStarter
   /** Sent with each turn to the template route, which reads it from the body. */
   templateId?: string
+  /** Given, a form can be attached for Flow to recreate; it is uploaded into this workspace's Files. */
+  organizationId?: string
+  /**
+   * Fills with the answers read off a form, offered once such a proposal is
+   * applied: a template makes a filled copy and opens it, a document fills
+   * them in `here`.
+   */
+  fill?: Readonly<{
+    action: (answers: Record<string, unknown>) => Promise<FlowFillResult>
+    here?: boolean
+    /** Opens the filled copy; a full page load when not given. */
+    open?: (href: string) => void
+  }>
+  /** Saves what the editor holds, so the fields the answers go in are saved first; or says why it can't. */
+  onSaveFirst?: () => Promise<string | null>
 }
 
 /**
@@ -120,7 +147,10 @@ export function TemplateFlowPanel({
   autoSend = null,
   endpoint = "/api/templates/flow",
   starter = TEMPLATE_STARTER,
-  templateId
+  templateId,
+  organizationId,
+  fill,
+  onSaveFirst
 }: TemplateFlowPanelProps): ReactElement {
   // First, so the kept model is read before a carried message is sent.
   const flowModel = useFlowModel()
@@ -133,6 +163,30 @@ export function TemplateFlowPanel({
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null)
   const [review, setReview] = useState<FlowReview | null>(null)
   const [isRebuilding, setIsRebuilding] = useState<boolean>(false)
+  const attachment = useFlowAttachment(organizationId ?? "")
+  const mentions = useFlowMentions()
+  // How far the turn in flight has got, as the server says, and whether it is reading a form.
+  const [stages, setStages] = useState<readonly FlowStage[]>([])
+  const [readingForm, setReadingForm] = useState(false)
+  // The answers each proposal read off its form, by its message, kept in this
+  // tab only and never saved with the chat. A form recreated over several
+  // turns is answered a turn at a time, so every applied turn's answers from
+  // the same form are offered together.
+  const [formAnswers, setFormAnswers] = useState<ReadonlyMap<string, FormAnswers>>(new Map())
+  const justApplied = lastAppliedMessageId === null ? undefined : formAnswers.get(lastAppliedMessageId)
+
+  // Applied from Flow or from the editor's own banner: either way it arrives here.
+  if (lastAppliedMessageId !== null && justApplied && !justApplied.applied) {
+    setFormAnswers(new Map(formAnswers).set(lastAppliedMessageId, { ...justApplied, applied: true }))
+  }
+
+  const appliedAnswers = [...formAnswers.values()].filter((entry) => entry.applied)
+  const fillSourceId = appliedAnswers.at(-1)?.sourceId
+  const combinedAnswers: Record<string, unknown> = Object.assign(
+    {},
+    ...appliedAnswers.filter((entry) => entry.sourceId === fillSourceId).map((entry) => entry.answers)
+  )
+  const [filling, setFilling] = useState<boolean>(false)
   const timelineRef = useRef<HTMLDivElement>(null)
   const draftRef = useRef<TemplateFlowDraft>(draft)
   // What the editor holds now, read after a rebuild: null once it was rejected.
@@ -158,14 +212,22 @@ export function TemplateFlowPanel({
   }, [pendingProposal])
 
   const carried = useRef<string | null>(null)
-  const sendCarried = useEffectEvent((message: string): void => {
-    void submitMessage(message)
+  const sendCarried = useEffectEvent(({ instruction, mentions: carriedMentions, source }: FlowHandoff): void => {
+    const attached = organizationId ? source : undefined
+
+    if (attached) {
+      attachment.set(attached)
+    }
+
+    void submitMessage(instruction, attached ?? null, organizationId ? carriedMentions : undefined)
   })
 
   useEffect((): void => {
+    const key = autoSend ? JSON.stringify(autoSend) : null
+
     // The ref keeps a development double-run from sending it twice.
-    if (autoSend && carried.current !== autoSend) {
-      carried.current = autoSend
+    if (autoSend && carried.current !== key) {
+      carried.current = key
       sendCarried(autoSend)
     }
   }, [autoSend])
@@ -178,17 +240,26 @@ export function TemplateFlowPanel({
     }
   }, [messages, isLoading, pendingProposal])
 
-  async function submitMessage(message: string): Promise<void> {
-    const trimmedInstruction = message.trim()
+  async function submitMessage(
+    message: string,
+    source: FlowSource | null = attachment.source,
+    mentioned: readonly FlowMentionItem[] = mentions.items
+  ): Promise<void> {
+    const trimmedInstruction = message.trim() || (source ? RECREATE : "")
 
-    if (!trimmedInstruction || isLoading || pendingProposal !== null) {
+    if (!trimmedInstruction || isLoading || pendingProposal !== null || attachment.uploading) {
       return
     }
 
     setErrorMessage(null)
     setWarningMessage(null)
     setIsLoading(true)
+    // Said at once, before the server's first word arrives.
+    setStages(["reading"])
+    setReadingForm(source !== null)
     setInstruction("")
+    // A mention goes with this message only; a failed send puts it back.
+    mentions.clear()
     const controller = new AbortController()
     const timeoutId = window.setTimeout(
       (): void => controller.abort(),
@@ -202,25 +273,33 @@ export function TemplateFlowPanel({
           templateId,
           draft: toTemplateFlowDraft(draft),
           instruction: trimmedInstruction,
-          model: flowModel.chosen()
+          mentions: mentioned.length > 0 ? mentioned.map(({ id, kind }) => ({ id, kind })) : undefined,
+          model: flowModel.chosen(),
+          // Sent again on every turn while it stays attached: each turn reads it afresh.
+          sourceDocumentId: source?.id
         }),
-        headers: { "Content-Type": "application/json" },
+        headers: FLOW_STREAM_HEADERS,
         method: "POST",
         signal: controller.signal
       })
-      const payload = await readJsonResponse(response)
+      const turn = await readFlowTurn(response, (stage) => setStages((current) => (current.at(-1) === stage ? current : [...current, stage])))
 
-      if (!response.ok) {
-        throw new Error(readApiError(payload))
+      if (!turn.ok) {
+        throw new Error(turn.error)
       }
 
-      const result = parseFlowResult(payload)
+      const result = parseFlowResult(turn.payload)
       setMessages((currentMessages: TemplateFlowMessage[]) => [
         ...currentMessages,
         ...result.messages
       ])
 
       const assistantMessage = result.messages[1]
+      const answers = result.proposal?.sourceAnswers
+
+      if (answers && source && Object.keys(answers).length > 0) {
+        setFormAnswers((current) => new Map(current).set(assistantMessage.id, { answers, applied: false, sourceId: source.id }))
+      }
 
       if (result.proposal !== null) {
         const isCurrentBase =
@@ -266,7 +345,8 @@ export function TemplateFlowPanel({
         endpoint
       })
       setErrorMessage(reason)
-      setInstruction(trimmedInstruction)
+      setInstruction(message.trim())
+      mentions.restore(mentioned)
     } finally {
       window.clearTimeout(timeoutId)
       setIsLoading(false)
@@ -289,6 +369,9 @@ export function TemplateFlowPanel({
 
     if (drop) {
       dropped.add(index)
+      // The answers are keyed by the fields as first made; a rebuild makes them
+      // again and can key them otherwise, so its answers go rather than land wrong.
+      setFormAnswers((current) => withoutAnswers(current, (id) => id === messageId))
     } else {
       dropped.delete(index)
     }
@@ -393,6 +476,46 @@ export function TemplateFlowPanel({
     setErrorMessage(null)
   }
 
+  // Fills with what the form said, once the fields it goes in are saved.
+  async function fillAnswers(sourceId: string, answers: Record<string, unknown>): Promise<void> {
+    if (!fill) {
+      return
+    }
+
+    setFilling(true)
+
+    const refusal = (await onSaveFirst?.()) ?? null
+    const result = refusal === null ? await fill.action(answers).catch(() => null) : { message: refusal, ok: false as const }
+
+    if (!result?.ok) {
+      bizflowToast.error(result?.message ?? "The answers couldn't be filled in. Try again.")
+      setFilling(false)
+      return
+    }
+
+    // Said before a filled copy opens; the toast outlasts the move.
+    bizflowToast[result.kept > 0 ? "success" : "info"](describeFill(result.kept, result.dropped))
+
+    // Filled in, or nothing fit: the form is done with, so later turns no longer carry it.
+    setFormAnswers((current) => withoutAnswers(current, (_, entry) => entry.sourceId === sourceId))
+
+    if (attachment.source?.id === sourceId) {
+      attachment.clear()
+    }
+
+    if (result.href) {
+      if (fill.open) {
+        fill.open(result.href)
+      } else {
+        window.location.assign(result.href)
+      }
+
+      return
+    }
+
+    setFilling(false)
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault()
     void submitMessage(instruction)
@@ -418,21 +541,35 @@ export function TemplateFlowPanel({
         {messages.length === 0 ? (
           <FlowEmptyState onSelectPrompt={submitMessage} starter={starter} />
         ) : (
-          <ol className="flex flex-col gap-5">
-            {messages.map((message: TemplateFlowMessage) => (
+          <ol className="flex flex-col gap-3">
+            {messages.map((message: TemplateFlowMessage, index: number) => {
+              const previous = messages[index - 1]
+              const applied = message.role === "assistant" && message.id === lastAppliedMessageId
+              const answers = applied && fill && fillSourceId && Object.keys(combinedAnswers).length > 0 ? combinedAnswers : undefined
+
+              return (
               <FlowMessageEntry
-                canUndo={
-                  canUndo &&
-                  message.role === "assistant" &&
-                  message.id === lastAppliedMessageId
-                }
+                canUndo={canUndo && applied}
+                fillHere={fill?.here === true}
+                filling={filling}
                 key={message.id}
                 message={message}
-                onUndo={onUndo}
+                onFill={answers && fillSourceId ? (): void => void fillAnswers(fillSourceId, answers) : undefined}
+                onUndo={(): void => {
+                  // What an undone proposal read off its form no longer has fields to go in.
+                  setFormAnswers((current) => withoutAnswers(current, (id) => id === lastAppliedMessageId))
+                  onUndo()
+                }}
                 // The open card lists these changes and tracks drops; one list, not two.
                 showChanges={displayedPendingProposal === null || message.id !== pendingMessageId}
+                startsRun={
+                  previous?.role !== message.role ||
+                  (previous.authorUserId ?? previous.authorName) !== (message.authorUserId ?? message.authorName) ||
+                  Date.parse(message.createdAt) - Date.parse(previous.createdAt) > RUN_BREAK_MS
+                }
               />
-            ))}
+              )
+            })}
           </ol>
         )}
 
@@ -451,10 +588,9 @@ export function TemplateFlowPanel({
         )}
 
         {isLoading && (
-          <div className="mt-5 flex items-center gap-2 border-l border-primary/30 pl-3 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin text-primary" />
-            <span>Flow is reading the document…</span>
-          </div>
+          <ul className="mt-3 flex flex-col">
+            <FlowWorking readingForm={readingForm} stages={stages} />
+          </ul>
         )}
       </div>
 
@@ -475,11 +611,13 @@ export function TemplateFlowPanel({
         <label className="sr-only" htmlFor="flow-composer">
           Ask Flow
         </label>
+        {organizationId ? <FlowMentionChips mentions={mentions} /> : null}
+        {organizationId ? <FlowAttachChip attachment={attachment} /> : null}
         <div className="relative">
           {/* One line tall, growing with the message to about six. */}
           <textarea
             aria-describedby={pendingProposal ? "flow-composer-hint" : undefined}
-            className={`${FLOW_COMPOSER} disabled:opacity-60`}
+            className={cn(FLOW_COMPOSER, organizationId && FLOW_COMPOSER_ATTACH, "disabled:opacity-60")}
             disabled={isLoading || pendingProposal !== null}
             id="flow-composer"
             maxLength={2_000}
@@ -487,16 +625,21 @@ export function TemplateFlowPanel({
               setInstruction(event.target.value)
             }
             onKeyDown={handleComposerKeyDown}
+            onPaste={organizationId ? mentions.onPaste : undefined}
             placeholder={starter.placeholder}
             value={instruction}
           />
+          {organizationId ? (
+            <FlowAddButton attachment={attachment} disabled={isLoading || pendingProposal !== null} mentions={mentions} />
+          ) : null}
           <button
             aria-label="Send message to Flow"
             className={FLOW_SEND}
             disabled={
               isLoading ||
               pendingProposal !== null ||
-              instruction.trim().length < 2
+              attachment.uploading ||
+              (instruction.trim().length < 2 && !attachment.source)
             }
             type="submit"
           >
@@ -514,6 +657,33 @@ export function TemplateFlowPanel({
       </form>
     </aside>
   )
+}
+
+/** The answers one proposal read off a form, whether it was applied, and the form. */
+type FormAnswers = Readonly<{ answers: Record<string, unknown>; applied: boolean; sourceId: string }>
+
+function withoutAnswers(
+  current: ReadonlyMap<string, FormAnswers>,
+  drop: (messageId: string, entry: FormAnswers) => boolean
+): ReadonlyMap<string, FormAnswers> {
+  return new Map([...current].filter(([messageId, entry]) => !drop(messageId, entry)))
+}
+
+/**
+ * What filling with a form's answers did, in a line.
+ *
+ * @param kept - Answers filled in.
+ * @param dropped - Answers no field took.
+ * @returns The line.
+ */
+export function describeFill(kept: number, dropped: number): string {
+  if (kept === 0) {
+    return "No answers fit the form."
+  }
+
+  const filled = `Filled ${kept} ${kept === 1 ? "answer" : "answers"}.`
+
+  return dropped > 0 ? `${filled} ${dropped} didn't fit the form.` : filled
 }
 
 function FlowPendingProposalReceipt({
@@ -541,7 +711,7 @@ function FlowPendingProposalReceipt({
   return (
     <section
       aria-label="Pending Flow proposal"
-      className="mt-5 overflow-hidden rounded-[8px] border border-primary/20 bg-card shadow-sm"
+      className="mt-5 overflow-hidden rounded-md border border-primary/20 bg-card shadow-sm"
     >
       <div className="flex items-start justify-between gap-3 border-b border-primary/10 px-3 py-2.5">
         <div>
@@ -675,7 +845,7 @@ function FlowEmptyState({
       <div className="mt-5 flex flex-col gap-2">
         {starter.prompts.map((prompt: string) => (
           <button
-            className="group flex items-center justify-between gap-3 rounded-[8px] border border-primary/10 bg-card/65 px-3 py-2.5 text-left text-sm transition-colors hover:border-primary/25 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            className="group flex items-center justify-between gap-3 rounded-md border border-primary/10 bg-card/65 px-3 py-2.5 text-left text-sm transition-colors hover:border-primary/25 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
             key={prompt}
             onClick={(): void => {
               void onSelectPrompt(prompt)
@@ -693,41 +863,55 @@ function FlowEmptyState({
 
 function FlowMessageEntry({
   canUndo,
+  fillHere,
+  filling,
   message,
+  onFill,
   onUndo,
-  showChanges
+  showChanges,
+  startsRun
 }: {
   canUndo: boolean
+  /** Whether the answers go into this page rather than a copy. */
+  fillHere: boolean
+  filling: boolean
   message: TemplateFlowMessage
+  /** Offered once a proposal with answers read off its form is applied. */
+  onFill?: () => void
   onUndo: () => void
   showChanges: boolean
+  /** Whether this opens a run of one author's messages, which names them once. */
+  startsRun: boolean
 }): ReactElement {
-  const isUser = message.role === "user"
+  const time = <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
+
+  if (message.role === "user") {
+    const name = message.authorName || "Team member"
+
+    return (
+      <FlowMessage
+        author={
+          startsRun ? (
+            <>
+              {name}
+              {time}
+            </>
+          ) : undefined
+        }
+        from="member"
+        speaker={name}
+      >
+        {message.content}
+      </FlowMessage>
+    )
+  }
 
   return (
-    <li
-      className={cn(
-        "border-l pl-3",
-        isUser ? "border-border" : "border-primary/35"
-      )}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-          {isUser ? message.authorName || "Team member" : "Flow"}
-        </span>
-        <time
-          className="text-[10px] text-muted-foreground"
-          dateTime={message.createdAt}
-        >
-          {formatMessageTime(message.createdAt)}
-        </time>
-      </div>
-      <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">
-        {message.content}
-      </p>
+    <FlowMessage author={startsRun ? time : undefined} from="flow">
+      <p className="whitespace-pre-wrap">{message.content}</p>
 
       {showChanges && message.operations.length > 0 && (
-        <div className="mt-3 overflow-hidden rounded-[8px] border border-primary/12 bg-card/70">
+        <div className="mt-3 overflow-hidden rounded-md border border-primary/12 bg-card/70">
           <div className="border-b border-primary/10 px-3 py-2">
             <span className="editorial-kicker text-primary">
               Proposed change set
@@ -738,22 +922,30 @@ function FlowMessageEntry({
               <FlowLedgerRow key={operation.id} operation={operation} />
             ))}
           </ul>
-          <div className="flex items-center justify-between gap-3 border-t border-primary/10 px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-primary/10 px-3 py-2">
             <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <PencilLine className="size-3.5 text-primary" />
               {message.operations.length}{" "}
               {message.operations.length === 1 ? "change" : "changes"} proposed
             </span>
-            {canUndo && (
-              <Button onClick={onUndo} size="xs" type="button" variant="ghost">
-                <RotateCcw />
-                Undo
-              </Button>
-            )}
+            <span className="ml-auto flex items-center gap-1">
+              {onFill && (
+                <Button className="max-md:h-9" disabled={filling} onClick={onFill} size="xs" type="button" variant="ghost">
+                  {filling ? <LoaderCircle className="animate-spin" /> : fillHere ? <PencilLine /> : <FilePlus2 />}
+                  {fillHere ? "Fill in answers" : "Create filled copy"}
+                </Button>
+              )}
+              {canUndo && (
+                <Button className="max-md:h-9" onClick={onUndo} size="xs" type="button" variant="ghost">
+                  <RotateCcw />
+                  Undo
+                </Button>
+              )}
+            </span>
           </div>
         </div>
       )}
-    </li>
+    </FlowMessage>
   )
 }
 
@@ -767,7 +959,7 @@ function FlowLedgerRow({
       {renderOperationIcon(operation.type)}
       <div className="min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-primary">
+          <span className="text-[11px] text-primary">
             {formatOperationType(operation.type)}
           </span>
           <span className="text-xs font-medium">{operation.summary}</span>
@@ -896,6 +1088,8 @@ const flowProposalSchema = z
     // Read only by the server, which checks them again before using them.
     wireOperations: z.array(z.custom<TemplateFlowWireOperation>(isRecord)),
     changedBlockIds: z.array(z.string()),
+    // Answers read off an attached form; the server checks them again before filling them in.
+    sourceAnswers: z.record(z.string(), z.unknown()).optional(),
     qualityIssues: z.array(
       z.object({ code: z.string(), severity: z.enum(["critical", "warning"]), message: z.string(), affectedBlockIds: z.array(z.string()) })
     )
@@ -906,6 +1100,8 @@ const flowMessageSchema = z.object({
   id: z.string(),
   role: z.enum(["user", "assistant"]),
   content: z.string(),
+  // A server from before author ids were sent leaves it out.
+  authorUserId: z.string().nullable().catch(null),
   authorName: z.string().nullable(),
   operations: z.array(ledgerItemSchema),
   changedBlockIds: strings,

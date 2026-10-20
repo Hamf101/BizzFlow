@@ -1,4 +1,5 @@
 import { formatDateAnswer } from "@/lib/date-format"
+import { calculateTemplateAnswers } from "@/types/template-calculation"
 import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
 import { boxNote, boxSigner, withBoxMarks } from "@/types/box-signers"
 import {
@@ -23,12 +24,18 @@ import type {
 /**
  * Validates and normalizes untrusted generated-document PDF input.
  *
+ * A fillable copy, or a draft not yet answered, is a blank form: it prints
+ * every branch under its rule in words, since paper and PDF viewers run no
+ * rules. Anything answered prints only the branches its answers chose.
+ *
  * @param input - Document metadata, snapshot, answers, workflow, and signer state.
+ * @param options - `fillable` when the PDF gets form fields.
  * @returns Canonical PDF input with parsed template content and a signer array.
  * @throws DocumentPdfServiceError when any required value is invalid.
  */
 export function normalizePdfInput(
-  input: RenderGeneratedDocumentPdfInput
+  input: RenderGeneratedDocumentPdfInput,
+  { fillable = false }: { fillable?: boolean } = {}
 ): NormalizedPdfInput {
   if (!input.documentId.trim()) {
     throw new DocumentPdfServiceError("Document id is required.", 400)
@@ -78,9 +85,10 @@ export function normalizePdfInput(
     }
   }
 
-  // A drawn box prints only its own signer's mark, never a drawing anyone
+  // A document prints what its formulas work out, not what it was handed, and
+  // a drawn box prints only its own signer's mark, never a drawing anyone
   // else stored as its answer.
-  const answers = withBoxMarks(content.blocks, input.answers, signers)
+  const answers = withBoxMarks(content.blocks, calculateTemplateAnswers(content, input.answers), signers)
 
   return {
     ...input,
@@ -91,11 +99,15 @@ export function normalizePdfInput(
       title,
       content,
       answers,
-      mode: "final",
+      mode: fillable || (input.workflowStatus === "draft" && !Object.values(answers).some(isAnswered)) ? "blank" : "final",
     }),
     metadataTimestamp,
     signers,
   }
+}
+
+function isAnswered(value: unknown): boolean {
+  return !(value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0))
 }
 
 /**
@@ -170,6 +182,45 @@ export function isFieldChecked(block: Extract<PdfFieldBlock, { type: "checkbox_f
 // The page shows answer boxes at these heights too, so they live with the blocks.
 export { answerBoxHeight } from "@/types/template"
 /** The gap between an answer box's edge and its text, in points. */
+type MarginSlot = "left" | "center" | "right"
+
+// Points kept clear between header or footer words.
+export const MARGIN_WORDS_GAP = 12
+
+/**
+ * The most room each header or footer slot may print in, from the width its
+ * words would take. A centred word keeps to a third so it stays centred, and
+ * the sides share the rest; with nothing centred, the shorter side keeps its
+ * words, up to half, and the longer takes what is left, so a long title runs
+ * up to the page count instead of stopping at a third.
+ */
+export function fitMarginWords(
+  natural: Partial<Record<MarginSlot, number>>,
+  width: number,
+  gap: number
+): Partial<Record<MarginSlot, number>> {
+  const fitted: Partial<Record<MarginSlot, number>> = {}
+
+  if (natural.center !== undefined) {
+    fitted.center = Math.min(natural.center, width / 3)
+    const side = (width - fitted.center) / 2 - gap
+
+    for (const slot of ["left", "right"] as const) {
+      if (natural[slot] !== undefined) fitted[slot] = Math.min(natural[slot], side)
+    }
+
+    return fitted
+  }
+
+  const [shorter, longer] = (natural.left ?? 0) <= (natural.right ?? 0) ? (["left", "right"] as const) : (["right", "left"] as const)
+  const kept = Math.min(natural[shorter] ?? 0, (width - gap) / 2)
+
+  if (natural[shorter] !== undefined) fitted[shorter] = kept
+  if (natural[longer] !== undefined) fitted[longer] = Math.min(natural[longer], width - (natural[shorter] === undefined ? 0 : kept + gap))
+
+  return fitted
+}
+
 export const ANSWER_BOX_PADDING = 6
 /** How far a checkbox's label sits from the box's left edge, in points. */
 export const CHECKBOX_LABEL_INSET = 16
@@ -316,6 +367,7 @@ export const TABLE_CELL_PADDING = { across: 4, down: 2.5 } as const
 export function combBoxes(block: TemplateBlock, answer: string): number {
   return block.type === "text_field" && block.comb && answer.length <= block.comb ? block.comb : 0
 }
+
 
 /** A comb box's width: 16 points, narrowed to fit the room, but never under 10. */
 export function combWidth(boxes: number, width: number): number {
@@ -470,3 +522,5 @@ export function formatSignedAt(value: string): string {
 
   return date.toISOString().replace("T", " ").replace(".000Z", " UTC")
 }
+
+export { tableTotalRow } from "@/types/template-formula"

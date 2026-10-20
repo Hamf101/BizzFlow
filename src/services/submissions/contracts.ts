@@ -71,6 +71,8 @@ export type SubmissionActorInput = {
 
 /** Input for one page of the submissions an actor may see. */
 export type ListSubmissionPageInput = SubmissionActorInput & {
+  /** False when the caller shows the rows only, so no total is counted. */
+  withTotal?: boolean
   /** A member's user id, or null for submissions nobody is assigned to. */
   assignedTo?: string | null
   /** Only the submissions this member started. */

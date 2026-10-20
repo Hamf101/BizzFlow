@@ -40,9 +40,9 @@ test("an outsider opens a shared document from the link, only reads it, and lose
 
   try {
     await expect(page.getByText(sharedDocument?.title as string).first()).toBeVisible()
-    await expect(page.getByRole("link", { name: "Download PDF" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Export" })).toBeVisible()
     // A reader: nothing to change it with, nobody to share it with.
-    await expect(page.getByRole("link", { name: "Edit" })).toHaveCount(0)
+    await expect(page.getByRole("link", { name: "Back to editing" })).toHaveCount(0)
     await expect(page.getByRole("button", { name: "Share" })).toHaveCount(0)
 
     const pdf = await page.request.get(`/api/documents/${shared.documentId}/pdf`)
@@ -104,7 +104,8 @@ async function joinAsGuest(
   await page.getByLabel("Choose a password").fill(password)
   await page.getByLabel("Confirm password").fill(password)
   await page.getByRole("button", { name: "Open the document" }).click()
-  await page.waitForURL(`**/documents/${grant.documentId}/preview`)
+  // An Editor opens straight into the editor; a reader lands on the preview.
+  await page.waitForURL(`**/documents/${grant.documentId}/${grant.accessLevel === "contributor" ? "edit" : "preview"}`)
 
   return { context, page, token }
 }
@@ -138,8 +139,6 @@ test("an outsider given a draft as an Editor changes it alongside the workspace,
   const { page } = guest
 
   try {
-    await page.getByRole("link", { name: "Edit" }).click()
-    await page.waitForURL(`**/documents/${documentId}/edit`)
     const titleField = page.getByLabel("Title", { exact: true })
     await waitForHydration(titleField)
     await expect(page.getByRole("button", { name: "Send" })).toHaveCount(0)

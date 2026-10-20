@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from "node:crypto"
 
-import { z } from "zod"
+import * as z from "zod"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { type RecordAuditLogInput } from "@/services/audit-service"
@@ -62,6 +62,8 @@ export function derivePublicLinkToken(linkId: string): string {
 
 export type CreatePublicFormLinkInput = TemplateAccessInput & {
   expiresAt?: string | null
+  /** Where the link is used, such as "Front desk". */
+  label?: string | null
   maxSubmissions?: number | null
 }
 
@@ -227,6 +229,12 @@ export function createId(deps: PublicFormServiceDeps): string {
 }
 
 export const linkLimitsSchema = z.object({
+  label: z
+    .string()
+    .trim()
+    .max(80, "Keep the link's name to 80 characters.")
+    .nullish()
+    .transform((value) => value || null),
   expiresAt: z.iso.datetime({ local: true, offset: true, error: "Choose a valid expiry date." }).nullish(),
   maxSubmissions: z.number().int().positive("The submission limit must be a whole number above zero.").nullish(),
 })

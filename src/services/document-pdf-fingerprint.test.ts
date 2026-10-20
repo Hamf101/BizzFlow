@@ -39,7 +39,7 @@ import { createSampleDocumentInput } from "@/services/document-pdf/sample-docume
 // so the rendered metadata and the visible signature timestamps agree.
 const FIXED_METADATA_TIMESTAMP = "2026-07-17T19:30:00.000Z"
 
-const EXPECTED_PAGE_COUNT = 4
+const EXPECTED_PAGE_COUNT = 5
 
 // A4 at 72dpi (595.28 x 841.89 points, as template-render-plan.ts sizes it), rounded.
 // Deliberately written out rather than imported: importing the constants would
@@ -49,14 +49,19 @@ const EXPECTED_PAGE_SIZE = { height: 842, width: 595 }
 
 // The sample gained a prefix and suffix, a comb, a checkbox group, a choice
 // grid and a fill-in table (2026-10-01), which pushed it onto a fourth page.
+// A list's words hang clear of their markers (2026-10-05): the bullets are
+// drawn apart from their words, which also reorders the embedded glyphs, so
+// every page's stream changed. A completed document closes with its signing
+// certificate (2026-10-17): a fifth page, the first four untouched.
 const EXPECTED_CONTENT_STREAM_SHA256: readonly string[] = [
-  "471b0b3c0b59254c140fb76bc202586f6fa3df694f09bcaea6989addbb66cc4e",
-  "f870402627999a036d326ecd4c06d0dbd9772bf1e45cff984d726036fb86f523",
-  "f95bc2718e26a2b359a84de7ba146f55ba401352b58f4b84ce3a2396db91eb38",
-  "315bfe826b97d99d6729678a3744a5023c50d8af162a7927d539ead8b52d83b7"
+  "d56eb776da576d770761cf52ef0e0d860a71774644784742a8ff426b754717e3",
+  "e1fe108f5673deb7f6ffa1c89ebf141618ac4cab1f15b194427d7995cdf1e1fa",
+  "cb54b16aca9b44cf9fa6b0b937b736a00bc66426effa810fb000dd1122122ac1",
+  "904db9abf1639d5000355b84ba1c9e1613c527a1a0676f58e4bbd26463ff4d7c",
+  "0a2030079edafc4ed4776e230755ae8a94b41f375c3f68d74ffaf0c2a8423c2b"
 ]
 
-// Four pages of text with a few fields and a signature. Whole font files made
+// Four pages of text with a few fields and a signature, and the certificate. Whole font files made
 // even a one-line document about 0.9 MB; only the glyphs drawn are embedded.
 const MAX_SAMPLE_BYTES = 150 * 1024
 
@@ -76,6 +81,29 @@ describe("generated document PDF fingerprint", () => {
     ])
 
     expect(first.equals(second)).toBe(true)
+  })
+
+  it("ends a completed document with its signing certificate, and one still being signed without", async () => {
+    const sample = createSampleDocumentInput()
+    const [completed, awaiting] = await Promise.all([
+      renderGeneratedDocumentPdf({ ...sample, metadataTimestamp: FIXED_METADATA_TIMESTAMP }),
+      renderGeneratedDocumentPdf({ ...sample, metadataTimestamp: FIXED_METADATA_TIMESTAMP, workflowStatus: "awaiting_signatures" }),
+    ])
+    const pageCount = async (bytes: Buffer): Promise<number> => (await PDFDocument.load(bytes)).getPageCount()
+
+    expect(await pageCount(completed)).toBe((await pageCount(awaiting)) + 1)
+  })
+
+  it("carries a long list of signers on over further certificate pages", async () => {
+    const sample = createSampleDocumentInput(FIXED_METADATA_TIMESTAMP)
+    const many = Array.from({ length: 40 }, (_, index) => ({ ...sample.signers![0], id: `signer-${index}`, name: `Signer ${index}` }))
+    const [one, forty] = await Promise.all([
+      renderGeneratedDocumentPdf({ ...sample, signers: [sample.signers![0]] }),
+      renderGeneratedDocumentPdf({ ...sample, signers: many }),
+    ])
+    const pageCount = async (bytes: Buffer): Promise<number> => (await PDFDocument.load(bytes)).getPageCount()
+
+    expect(await pageCount(forty)).toBeGreaterThan((await pageCount(one)) + 1)
   })
 
   it("keeps page count and geometry stable", async () => {

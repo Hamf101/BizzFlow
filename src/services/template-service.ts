@@ -9,6 +9,7 @@ export {
   createGeneratedDocument,
   recordDocumentRecentAccess,
 } from "./templates/generated-document-service"
+export { createDocumentCopy, createFilledTemplateCopy } from "./templates/filled-copy-service"
 export { changeDocumentTemplates } from "./templates/template-bulk-service"
 export {
   archiveDocumentTemplate,
@@ -21,6 +22,8 @@ export {
   listDocumentTemplates,
   listDocumentTemplateVersions,
   publishDocumentTemplate,
+  purgeDueTrashedTemplates,
+  purgeTrashedDocumentTemplate,
   updateDocumentTemplate,
 } from "./templates/template-lifecycle-service"
 export { listTemplatePage } from "./templates/template-list-service"

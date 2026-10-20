@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
-import { z } from "zod"
+import * as z from "zod"
 
 import { enforceActionRateLimit } from "@/lib/action-rate-limit"
 import { buildAuthCallbackUrl } from "@/lib/auth-redirects"

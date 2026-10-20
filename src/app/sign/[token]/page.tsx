@@ -4,6 +4,7 @@ import { headers } from "next/headers"
 import type { ReactElement } from "react"
 
 import { BizFlowWordmark } from "@/components/brand/bizflow-mark"
+import { DeclineSigningForm } from "@/components/documents/decline-signing-form"
 import { PublicDocumentSigningForm } from "@/components/documents/public-document-signing-form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -144,6 +145,10 @@ export default async function PublicSigningPage({
         <Alert className="mx-auto w-full max-w-6xl">
           <CheckCircle2 />
           <AlertTitle>All parties have signed</AlertTitle>
+          <AlertDescription>
+            {/* A plain link: the copy page sends the browser on to the file. */}
+            <a href={`/sign/copy/${encodeURIComponent(token)}`}>Download your signed copy</a>
+          </AlertDescription>
         </Alert>
       ) : isRecipientSigned ? (
         <Alert className="mx-auto w-full max-w-6xl">
@@ -168,6 +173,9 @@ export default async function PublicSigningPage({
           view={view}
         />
         <PublicSigningStatusCard view={view} />
+      </div>
+      <div className="mx-auto w-full max-w-6xl empty:hidden">
+        {!isRecipientSigned && view.workflowStatus === "awaiting_signatures" ? <DeclineSigningForm token={token} /> : null}
       </div>
     </PublicSigningShell>
   )

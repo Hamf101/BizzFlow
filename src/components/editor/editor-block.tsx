@@ -24,7 +24,7 @@ import { PaperField, PRINTED_HEADING, printedSpace } from "@/components/editor/p
 import { placeImage, SNAP_PX } from "@/components/editor/image-placement"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
 import { RichText } from "@/components/templates/rich-text"
-import { TemplateStaticBlock } from "@/components/templates/template-static-block"
+import { listItemIndent, listItemMarker, TemplateStaticBlock } from "@/components/templates/template-static-block"
 import { cn } from "@/lib/utils"
 import { type TemplateBlock, type TemplateLayout, type TextRun } from "@/types/template"
 import { answerBoxHeight, BOX_HEIGHT_POINTS } from "@/types/template-limits"
@@ -110,10 +110,13 @@ export const PAGE_BREAKS_FOLDED = { "--page-space-display": "none", "--page-spac
 export function CanvasBlock({
   actions,
   block,
+  listMarkers = null,
   placed = false,
 }: {
   actions: CanvasActions
   block: TemplateBlock
+  /** A numbered list's markers from the render plan, such as "3.1" and "(a)". */
+  listMarkers?: readonly string[] | null
   /** Whether it is a picture drawn in its box on a page rather than in the text. */
   placed?: boolean
 }): ReactElement {
@@ -256,7 +259,7 @@ export function CanvasBlock({
       {!placed && (selected || (text && controller.activeBlockId === block.id)) ? (
         <Grip actions={actions} blockId={block.id} />
       ) : null}
-      <BlockBody actions={actions} block={block} placed={placed} />
+      <BlockBody actions={actions} block={block} listMarkers={listMarkers} placed={placed} />
     </div>
   )
 }
@@ -269,7 +272,17 @@ export function CanvasBlock({
  * @param props - What the canvas does, and the page it covers.
  * @returns The page, with the menu.
  */
-function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: TemplateBlock; placed: boolean }): ReactElement {
+function BlockBody({
+  actions,
+  block,
+  listMarkers,
+  placed,
+}: {
+  actions: CanvasActions
+  block: TemplateBlock
+  listMarkers: readonly string[] | null
+  placed: boolean
+}): ReactElement {
   const breaks = useContext(PageBreaks)
   const tools = useDesignTools()
 
@@ -316,9 +329,9 @@ function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: 
 
       return (
         <List
-          className={cn(block.type === "bullet_list" ? "list-disc" : "list-decimal", "grid gap-[0.3em]")}
-          // Each item leaves 3 points under it, as the PDF does.
-          style={{ lineHeight: "var(--doc-line-height, 1.5)", paddingBottom: "0.3em", paddingLeft: "1.4em" }}
+          className="grid list-none gap-[0.3em]"
+          // Each item leaves 3 points under it, as the PDF does; numbers such as 3.12 need more room than a bullet.
+          style={{ lineHeight: "var(--doc-line-height, 1.5)", paddingBottom: "0.3em", paddingLeft: block.type === "bullet_list" ? "1.4em" : "2.2em" }}
         >
           {block.items.map((item: string, index: number) => (
             <TextLine
@@ -330,9 +343,15 @@ function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: 
               label="List item"
               onChange={(text, runs) => actions.onListInput(block, index, text, runs)}
               onKeyDown={(event, caret) => actions.onListKeyDown(event, caret, block, index)}
+              // Marked by the plan, as the PDF prints it, in the room to the item's left.
+              className="relative before:absolute before:right-full before:pr-[0.45em] before:tabular-nums before:content-[var(--marker)]"
               placeholder="List item"
               runs={block.itemRuns?.[index] ?? undefined}
-              style={spaceBefore(breaks[`${block.id}:${index}`])}
+              style={{
+                ...spaceBefore(breaks[`${block.id}:${index}`]),
+                "--marker": JSON.stringify(listItemMarker(block, index, listMarkers)),
+                marginLeft: listItemIndent(block, index),
+              } as CSSProperties}
               value={item}
             />
           ))}

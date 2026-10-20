@@ -99,7 +99,7 @@ export function RoomLayer({
       {marks.outlines.map((box) => (
         <div
           aria-hidden="true"
-          className="absolute rounded-[11px] border-2 transition-[left,top,width,height] duration-150 ease-out motion-reduce:transition-none"
+          className="absolute rounded-md border-2 transition-[left,top,width,height] duration-150 ease-out motion-reduce:transition-none"
           data-slot="room-outline"
           key={box.key}
           style={{ borderColor: box.color, height: box.height + 16, left: box.x - 8, top: box.y - 8, width: box.width + 16 }}
@@ -107,7 +107,7 @@ export function RoomLayer({
           <span className="absolute -top-[11px] right-1 flex gap-1">
             {box.names.map((name) => (
               <span
-                className="rounded-[5px] px-1.5 py-[3px] text-[11px] leading-none font-semibold whitespace-nowrap text-brand-paper"
+                className="rounded-xs px-1.5 py-[3px] text-[11px] leading-none font-semibold whitespace-nowrap text-brand-paper"
                 key={name}
                 style={{ backgroundColor: box.color }}
               >
@@ -127,7 +127,7 @@ export function RoomLayer({
         >
           <span
             className={cn(
-              "absolute bottom-full left-0 mb-px rounded-[5px] rounded-bl-none leading-none font-semibold whitespace-nowrap text-brand-paper",
+              "absolute bottom-full left-0 mb-px rounded-xs rounded-bl-none leading-none font-semibold whitespace-nowrap text-brand-paper",
               narrow ? "px-[3px] py-0.5 text-[10px]" : "px-[5px] py-[3px] text-[11px]"
             )}
             style={{ backgroundColor: box.color }}
@@ -139,7 +139,7 @@ export function RoomLayer({
       ))}
       {marks.folds.map((fold) => {
         const label = `${fold.count} ${fold.count === 1 ? "comment" : "comments"}`
-        const className = "pointer-events-auto absolute rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        const className = "pointer-events-auto absolute rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         const style = { left: fold.x, top: fold.y }
 
         return narrow ? (
@@ -218,7 +218,7 @@ export function RoomPeople({
     </>
   )
   const triggerClass = cn(
-    "relative inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+    "relative inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
     pill ? "mr-1 bg-secondary pr-2 pl-1.5 text-primary hover:bg-secondary/75" : "w-9 justify-center text-foreground/80 hover:bg-muted"
   )
   const here = people.length > 0 ? `${sayNames(names)} ${people.length === 1 ? "is" : "are"} here` : "Only you are here"
@@ -376,7 +376,7 @@ export function RoomCheckpoints({
       ) : null}
       <ul className="grid gap-1">
         {checkpoints?.map((checkpoint) => (
-          <li className="flex min-h-11 items-center gap-3 rounded-[8px] px-2 hover:bg-muted/60" key={checkpoint.id}>
+          <li className="flex min-h-11 items-center gap-3 rounded-md px-2 hover:bg-muted/60" key={checkpoint.id}>
             <span className="grid min-w-0 flex-1">
               <span className="truncate text-sm">{checkpoint.label}</span>
               <span className="truncate text-xs text-muted-foreground">
@@ -513,7 +513,7 @@ function Chat({
                 ) : null}
                 {mine ? (
                   <p
-                    className="max-w-[13.75rem] self-end rounded-[12px] rounded-br-[4px] bg-secondary px-2.5 py-[7px] leading-[1.35] break-words whitespace-pre-wrap text-secondary-foreground"
+                    className="max-w-[13.75rem] self-end rounded-lg rounded-br-xs bg-secondary px-2.5 py-[7px] leading-[1.35] break-words whitespace-pre-wrap text-secondary-foreground"
                     title={when(message.createdAt, today)}
                   >
                     {message.body}
@@ -523,7 +523,7 @@ function Chat({
                     <Face color={tint(message.authorId)} name={message.author} />
                     <div className="min-w-0">
                       <p className="mb-0.5 ml-0.5 text-[11.5px] text-muted-foreground">{firstName(message.author)}</p>
-                      <p className="max-w-[13.75rem] rounded-[12px] rounded-bl-[4px] bg-muted px-2.5 py-[7px] leading-[1.35] break-words whitespace-pre-wrap">
+                      <p className="max-w-[13.75rem] rounded-lg rounded-bl-xs bg-muted px-2.5 py-[7px] leading-[1.35] break-words whitespace-pre-wrap">
                         {message.body}
                       </p>
                     </div>
@@ -580,7 +580,7 @@ function Composer({
 
   return (
     <form
-      className="mt-1 flex h-9 items-center gap-1 rounded-[9px] border border-input bg-card pr-1 pl-2.5 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30"
+      className="mt-1 flex h-9 items-center gap-1 rounded-sm border border-input bg-card pr-1 pl-2.5 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30"
       onSubmit={(event) => void send(event)}
     >
       <input
@@ -598,7 +598,7 @@ function Composer({
       ) : (
         <button
           aria-label="Send"
-          className="grid size-7 place-items-center rounded-[7px] text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+          className="grid size-7 place-items-center rounded-sm text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
           disabled={busy || !text.trim()}
           title="Send"
           type="submit"

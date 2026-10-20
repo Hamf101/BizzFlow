@@ -1,4 +1,4 @@
-import { createNoStoreResponse, refuseCronRequest } from "@/app/api/cron/_cron"
+import { createNoStoreResponse, monitoredCronResponse, refuseCronRequest } from "@/app/api/cron/_cron"
 import { captureUnexpectedError, describeErrorForLog } from "@/lib/observability"
 import {
   cleanupExpiredSubmissionFileObjects,
@@ -28,29 +28,31 @@ export async function GET(request: Request): Promise<Response> {
     return refusal
   }
 
-  try {
-    const expiry = await expireAbandonedFilesOrReport(startedAt)
-    const cleanup = await cleanupExpiredSubmissionFileObjects()
+  return monitoredCronResponse("submission-file-cleanup", "15 3 * * *", async (): Promise<Response> => {
+    try {
+      const expiry = await expireAbandonedFilesOrReport(startedAt)
+      const cleanup = await cleanupExpiredSubmissionFileObjects()
 
-    if (!expiry) {
+      if (!expiry) {
+        return createNoStoreResponse(
+          { error: "Submission file cleanup failed." },
+          500
+        )
+      }
+
+      return createNoStoreResponse({ ...expiry, ...cleanup }, 200)
+    } catch (error: unknown) {
+      console.error("submission_file_cleanup_cron_failed", {
+        durationMs: Date.now() - startedAt,
+        ...describeErrorForLog(error),
+      })
+      captureUnexpectedError(error, { routeName: "cron_submission_file_cleanup" })
       return createNoStoreResponse(
         { error: "Submission file cleanup failed." },
         500
       )
     }
-
-    return createNoStoreResponse({ ...expiry, ...cleanup }, 200)
-  } catch (error: unknown) {
-    console.error("submission_file_cleanup_cron_failed", {
-      durationMs: Date.now() - startedAt,
-      ...describeErrorForLog(error),
-    })
-    captureUnexpectedError(error, { routeName: "cron_submission_file_cleanup" })
-    return createNoStoreResponse(
-      { error: "Submission file cleanup failed." },
-      500
-    )
-  }
+  })
 }
 
 // Expiry and cleanup are independent: objects superseded by earlier passes are

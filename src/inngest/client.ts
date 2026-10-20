@@ -1,5 +1,5 @@
 import { Inngest, eventType } from "inngest"
-import { z } from "zod"
+import * as z from "zod"
 
 import { getInngestEnv } from "@/lib/env"
 

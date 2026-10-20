@@ -21,6 +21,7 @@ import type {
   DocumentSigningRecipient,
   MemberDocumentSigningView,
   PublicDocumentSigningView,
+  SigningDecline,
   PublicSignerStatus,
 } from "@/types/signing"
 import {
@@ -35,7 +36,7 @@ import {
 const ANSWER_COLUMNS =
   "document_id,org_id,values,workflow_status,created_at,updated_at"
 const RECIPIENT_COLUMNS =
-  "id,org_id,document_id,user_id,name,email,requires_signature,status,token_hash,token_expires_at,invited_at,viewed_at,signed_at,signature_data,initials_data"
+  "id,org_id,document_id,user_id,name,email,requires_signature,status,token_hash,token_expires_at,invited_at,viewed_at,signed_at,signature_data,initials_data,sent_by,consented_at,signed_ip"
 
 type OrganizationRow = {
   name: string
@@ -60,6 +61,10 @@ export type CompleteRecipientSignatureInput = {
   values: Record<string, unknown>
   signatureData: DrawingData | null
   initialsData: DrawingData | null
+  // The answers the patch was worked out from; refused once they change.
+  expectedValues?: Record<string, unknown>
+  consented: boolean
+  ip: string | null
 }
 
 /**
@@ -88,7 +93,7 @@ export async function loadGeneratedDocumentView(
   organizationId: string,
   documentId: string
 ): Promise<MemberDocumentSigningView> {
-  const [documentResult, answerResult, recipientResult, organizationResult] =
+  const [documentResult, answerResult, recipientResult, organizationResult, historyResult] =
     await Promise.all([
       client
         .from("documents")
@@ -107,6 +112,8 @@ export async function loadGeneratedDocumentView(
         .select(RECIPIENT_COLUMNS)
         .eq("document_id", documentId)
         .eq("org_id", organizationId)
+        // Signers whose round the sender cancelled are no longer the document's.
+        .is("revoked_at", null)
         // The order they were added in, which a signer's boxes are assigned by.
         .order("signer_number", { ascending: true }),
       client
@@ -114,6 +121,11 @@ export async function loadGeneratedDocumentView(
         .select("name")
         .eq("id", organizationId)
         .maybeSingle(),
+      client
+        .from("document_signing_recipients")
+        .select("name,status,revoked_at,declined_at,decline_reason")
+        .eq("document_id", documentId)
+        .eq("org_id", organizationId),
     ])
 
   if (documentResult.error) {
@@ -151,6 +163,10 @@ export async function loadGeneratedDocumentView(
     )
   }
 
+  if (historyResult.error || !historyResult.data) {
+    throw createDatabaseError(historyResult.error, "Unable to load signing recipients.")
+  }
+
   const document = mapGeneratedDocument(
     documentResult.data as GeneratedDocumentRow
   )
@@ -169,7 +185,29 @@ export async function loadGeneratedDocumentView(
     recipients: (recipientResult.data as DocumentSigningRecipientRow[]).map(
       mapSigningRecipient
     ),
+    declined: findLastDecline(historyResult.data as SigningHistoryRow[]),
   }
+}
+
+type SigningHistoryRow = Pick<DocumentSigningRecipientRow, "decline_reason" | "declined_at" | "name"> & {
+  revoked_at: string | null
+  // Wider than a live signer's status: a round's history includes "declined".
+  status: string
+}
+
+// A decline ends its round, revoking every link at that moment; once a later
+// round is sent (or cancelled) it is no longer the document's latest news.
+function findLastDecline(rows: SigningHistoryRow[]): SigningDecline | null {
+  if (rows.some((row) => row.revoked_at === null)) {
+    return null
+  }
+
+  const lastRevokedAt = rows.reduce<string | null>((last, row) => (row.revoked_at && (!last || row.revoked_at > last) ? row.revoked_at : last), null)
+  const decline = rows.find((row) => row.status === "declined" && row.revoked_at === lastRevokedAt)
+
+  return decline?.declined_at && decline.decline_reason
+    ? { name: decline.name, reason: decline.decline_reason, declinedAt: decline.declined_at }
+    : null
 }
 
 /**
@@ -262,6 +300,8 @@ export async function loadRecipientByToken(
     .from("document_signing_recipients")
     .select(RECIPIENT_COLUMNS)
     .eq("token_hash", tokenHash)
+    // A link from a round the sender cancelled opens nothing.
+    .is("revoked_at", null)
     .maybeSingle()
 
   if (error) {
@@ -285,13 +325,16 @@ export async function loadRecipientByToken(
  * @param organizationId - Tenant identifier.
  * @param documentId - Generated-document identifier.
  * @param values - Validated answer patch.
+ * @param expectedValues - Answers the patch was worked out from, when it was;
+ *   the database refuses the patch once they have changed.
  * @returns Stored answer object returned by the database function.
  */
 export async function mergeGeneratedDocumentAnswers(
   client: SigningServiceClient,
   organizationId: string,
   documentId: string,
-  values: Record<string, unknown>
+  values: Record<string, unknown>,
+  expectedValues?: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   const { data, error } = await client.rpc(
     "merge_generated_document_answers",
@@ -299,6 +342,7 @@ export async function mergeGeneratedDocumentAnswers(
       target_org_id: organizationId,
       target_document_id: documentId,
       target_values: values,
+      target_expected_values: expectedValues,
     }
   )
 
@@ -362,6 +406,65 @@ export async function startSigningWorkflow(
   return Boolean(data)
 }
 
+/** A signer whose link a cancelled round revoked. */
+export type RevokedSigningRecipient = Pick<DocumentSigningRecipientRow, "email" | "id" | "name" | "status">
+
+/**
+ * Takes a document awaiting signatures back to a draft and revokes every
+ * signer's link, atomically under the answer row's lock, so a signature
+ * landing at the same moment either completes the document first or is refused.
+ *
+ * @param client - Signing persistence client.
+ * @param organizationId - Tenant identifier.
+ * @param documentId - Generated-document identifier.
+ * @returns The signers whose links were revoked.
+ */
+export async function cancelSigningWorkflow(
+  client: SigningServiceClient,
+  organizationId: string,
+  documentId: string
+): Promise<RevokedSigningRecipient[]> {
+  const { data, error } = await client.rpc("cancel_document_signing", {
+    target_org_id: organizationId,
+    target_document_id: documentId,
+  })
+
+  if (error || !Array.isArray(data)) {
+    throw createDatabaseError(error, "Unable to cancel signing.")
+  }
+
+  return data as RevokedSigningRecipient[]
+}
+
+/**
+ * Records a signer's decline with its reason and, under the answer row's lock,
+ * takes the document back to a draft with every link revoked.
+ *
+ * @param client - Signing persistence client.
+ * @param recipient - The declining signer, loaded through their token.
+ * @param reason - Their trimmed reason.
+ * @returns The signers whose links were revoked, the decliner included.
+ */
+export async function declineSigningWorkflow(
+  client: SigningServiceClient,
+  recipient: DocumentSigningRecipientRow,
+  reason: string
+): Promise<RevokedSigningRecipient[]> {
+  const { data, error } = await client.rpc("decline_document_signing", {
+    target_org_id: recipient.org_id,
+    target_document_id: recipient.document_id,
+    target_recipient_id: recipient.id,
+    target_token_hash: recipient.token_hash,
+    target_reason: reason,
+  })
+
+  if (error || !Array.isArray(data)) {
+    throw createDatabaseError(error, "Unable to decline signing.")
+  }
+
+  return data as RevokedSigningRecipient[]
+}
+
 /**
  * Replaces a pending recipient's private link metadata.
  *
@@ -386,6 +489,7 @@ export async function refreshSigningRecipientLink(
     .eq("document_id", input.documentId)
     .eq("org_id", input.organizationId)
     .neq("status", "signed")
+    .is("revoked_at", null)
     .select(RECIPIENT_COLUMNS)
     .maybeSingle()
 
@@ -416,6 +520,7 @@ export async function markSigningRecipientViewed(
     .eq("id", recipient.id)
     .eq("token_hash", recipient.token_hash)
     .eq("status", "pending")
+    .is("revoked_at", null)
     .select(RECIPIENT_COLUMNS)
     .maybeSingle()
 
@@ -447,6 +552,9 @@ export async function completeRecipientSignature(
       target_values: input.values,
       target_signature_data: input.signatureData,
       target_initials_data: input.initialsData,
+      target_expected_values: input.expectedValues,
+      target_consented: input.consented,
+      target_ip: input.ip,
     }
   )
 
@@ -517,6 +625,8 @@ export function mapSigningRecipient(
     invitedAt: row.invited_at,
     viewedAt: row.viewed_at,
     signedAt: row.signed_at,
+    consentedAt: row.consented_at ?? null,
+    signedIp: row.signed_ip ?? null,
     signatureDataUrl: getDrawingDataUrl(row.signature_data),
     initialsDataUrl: getDrawingDataUrl(row.initials_data),
   }

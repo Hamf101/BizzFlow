@@ -1,11 +1,13 @@
 "use client"
 
-import { Download, FilePen, Files, History, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
+import { Copy, Eye, Files, History, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
-import { DocumentRecipientCollection } from "@/components/documents/document-recipient-collection"
-import { useFlowHandoff } from "@/components/flow/flow-handoff"
+import { EditSentDocumentButton, signedDocumentActions } from "@/components/documents/edit-signed-document"
+import { mergeFilledAnswers, whyNotFill } from "@/components/documents/fill-answers"
+import { type FlowHandoff, useFlowHandoff } from "@/components/flow/flow-handoff"
 import { DesignToolsContext } from "@/components/editor/design-tools"
 import { DESIGN_TOOLS } from "@/components/editor/design-tools-provided"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
@@ -15,6 +17,7 @@ import { FormatBar } from "@/components/editor/format-bar"
 import { PaperSigning } from "@/components/editor/paper-field"
 import { FlowDockSlot, FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
+import { ExportMenu, ExportMenuItems, exportLinks } from "@/components/editor/export-menu"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
 import {
@@ -27,6 +30,7 @@ import {
   TemplateFlowPanel,
   PageSetupPanel,
   TemplateBrandingPanel,
+  DocumentRecipientCollection,
   SendToAnswerDialog,
   ShareDialog,
 } from "@/components/editor/lazy-panels"
@@ -37,12 +41,13 @@ import { useMissingPictureAddresses, usePictureAddresses } from "@/components/ed
 import { useWorkingCopyHistory } from "@/components/editor/use-working-copy-history"
 import type { FlowStarter } from "@/components/editor/template-flow-panel"
 import { useTimeZone } from "@/components/ui/local-date"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -50,13 +55,12 @@ import { bizflowToast } from "@/components/ui/toaster"
 import type { WorkingCopy } from "@/lib/collaboration/working-copy-doc"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { SigningRecipientStatusBadge } from "@/lib/page-status-badges"
-import { cn } from "@/lib/utils"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
 import type { DocumentSigningRecipient, GeneratedDocumentSigningView, PublicSignerStatus } from "@/types/signing"
 import { withBoxMarks } from "@/types/box-signers"
 import { type TemplateContentV3, upgradeV2TemplateContentToV3 } from "@/types/template"
-import type { TemplateFlowProposal } from "@/types/template-flow"
+import type { FlowFillResult, TemplateFlowProposal } from "@/types/template-flow"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
 type DocumentPage = { content: TemplateContentV3; title: string }
@@ -76,12 +80,22 @@ const SENT_STARTER: FlowStarter = {
 
 type DocumentEditorProps = {
   backHref: string
+  /** A blank document just made with New: the cursor starts on its page. */
+  startTyping?: boolean
+  /** Whether the member may make documents, and so edit a copy of a completed one. */
+  canCopy: boolean
+  /** Takes a document awaiting signatures back to an editable draft. */
+  cancelSigningAction: (formData: FormData) => Promise<void>
   canFill: boolean
   canSend: boolean
   /** Whether the member may choose who else can open this document. */
   canShare: boolean
+  /** Makes a new draft of the document and opens it. */
+  copyAction: (formData: FormData) => Promise<void>
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
+  /** Fills the document with answers Flow read off a form, keeping only those its fields take. */
+  fillAnswersAction: (documentId: string, answers: unknown) => Promise<FlowFillResult>
   /** Someone outside the workspace given this one document: no Flow, and Back goes to what is shared with them. */
   guest?: boolean
   /** Who is writing, as the others in the room see them. */
@@ -103,19 +117,25 @@ type DocumentEditorProps = {
  */
 export function DocumentEditor({
   backHref,
+  canCopy,
+  cancelSigningAction,
   canFill,
   canSend,
   canShare,
+  copyAction,
   editorLayout,
+  fillAnswersAction,
   guest = false,
   me,
   resendAction,
   saveAnswersAction,
   saveContentAction,
   sendAction,
+  startTyping = false,
   view,
 }: DocumentEditorProps): ReactElement {
   const timeZone = useTimeZone()
+  const router = useRouter()
   const document = view.document
   const completed = view.workflowStatus === "completed"
   const writable = canFill && view.workflowStatus === "draft" && view.recipients.length === 0
@@ -123,6 +143,7 @@ export function DocumentEditor({
   // remaining signers can still fill what is theirs.
   const signedCount = view.recipients.filter((recipient) => recipient.status === "signed").length
   const fillable = canFill && !completed && signedCount === 0
+  const offers = signedDocumentActions({ canCopy, canFill, canSend, workflowStatus: view.workflowStatus })
   const initial = useMemo(
     (): DocumentPage => ({ content: upgradeV2TemplateContentToV3(document.templateSnapshot), title: document.title }),
     [document]
@@ -159,9 +180,11 @@ export function DocumentEditor({
   const [savedPage, setSavedPage] = useState(initial)
   const [savedAnswers, setSavedAnswers] = useState<Record<string, unknown>>(view.answers)
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
+  // Who turned the last round down, until the sender dismisses it or sends again.
+  const [declined, setDeclined] = useState(view.guest ? null : (view.declined ?? null))
   const [flowUndo, setFlowUndo] = useState<{ messageId: string; page: DocumentPage } | null>(null)
   const [flowOpen, setFlowOpen] = useState(false)
-  const [carried, setCarried] = useState<string | null>(null)
+  const [carried, setCarried] = useState<FlowHandoff | null>(null)
 
   // A request made from a workspace page opens Flow here and carries on.
   useFlowHandoff((request) => {
@@ -237,6 +260,28 @@ export function DocumentEditor({
     // Live, the room's saves move the server on too, so a copy is made on the room's revision.
     version: live.session && live.roomId ? `${live.roomId}:${live.session.revision()}` : content.version,
   })
+  // The message that brought the proposal, so applying from the banner is the same as from Flow.
+  const proposalMessage = useRef("")
+  const answersRef = useRef(answers)
+
+  useEffect(() => {
+    answersRef.current = answers
+  })
+
+  // The fields the answers go in, and every answer typed so far, reach the
+  // server before a fill, which would otherwise miss or overwrite them.
+  async function readyToFill(): Promise<string | null> {
+    const refusal = writable ? whyNotFill({ content: page.content, title: page.title }) : null
+
+    if (refusal) {
+      return refusal
+    }
+
+    const pageSaved = !writable || (live.session ? await live.session.flush() : live.unavailable && (await content.flush()))
+
+    return pageSaved && (await answered.flush()) ? null : "Your latest changes aren't saved yet. Try again in a moment."
+  }
+
   const settingsBlock = page.content.blocks.find((block) => block.id === controller.settingsBlockId) ?? null
   const settingsIndex = settingsBlock ? page.content.blocks.indexOf(settingsBlock) : -1
   const geometry = resolvePageGeometry(page.content.layout)
@@ -249,7 +294,9 @@ export function DocumentEditor({
 
   // Pictures someone else added arrive without an address this page can load.
   useMissingPictureAddresses({ content: page.content, path: livePath, pictures, roomId: live.roomId, session: live.session })
-  const pdfHref = `/api/documents/${encodeURIComponent(document.id)}/pdf`
+  const exports = exportLinks(`/api/documents/${encodeURIComponent(document.id)}`, { fillable: !completed })
+  // Anything more than Export and Preview, which a phone folds in with them.
+  const more = canShare || (canSend && document.templateId !== null) || offers.copy
 
   const tools: DockTool[] = [
     {
@@ -329,6 +376,18 @@ export function DocumentEditor({
     setSending(true)
   }
 
+  // The preview is drawn from what the server has, so what is waiting saves first.
+  async function openPreview(): Promise<void> {
+    const saved = (await (live.session ? live.session.flush() : content.flush())) && (await answered.flush())
+
+    if (!saved) {
+      bizflowToast.error("Your latest changes aren't saved yet. Try again in a moment.")
+      return
+    }
+
+    router.push(`/documents/${encodeURIComponent(document.id)}/preview`)
+  }
+
   return (
     <DesignToolsContext.Provider value={DESIGN_TOOLS}>
       <EditorFrame
@@ -360,7 +419,7 @@ export function DocumentEditor({
               actions={
                 proposal.status === "pending" && writable
                   ? [
-                      ...(proposal.operations.length > 0 ? [{ label: "Apply", onClick: () => applyProposal(proposal, proposal.id) }] : []),
+                      ...(proposal.operations.length > 0 ? [{ label: "Apply", onClick: () => applyProposal(proposal, proposalMessage.current || proposal.id) }] : []),
                       { label: "Reject", onClick: () => setProposal(null) },
                     ]
                   : [{ label: "Dismiss", onClick: () => setProposal(null) }]
@@ -371,6 +430,10 @@ export function DocumentEditor({
                 : writable
                   ? "Flow's suggestion"
                   : "Flow's suggestion · this document can no longer change"}
+            </EditorNotice>
+          ) : declined ? (
+            <EditorNotice actions={[{ label: "Dismiss", onClick: () => setDeclined(null) }]}>
+              {declined.name} declined to sign: “{declined.reason}”
             </EditorNotice>
           ) : null
         }
@@ -401,7 +464,7 @@ export function DocumentEditor({
               <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))]">
                 <ul className="grid gap-2">
                   {view.recipients.map((recipient: PublicSignerStatus & Partial<DocumentSigningRecipient>) => (
-                    <li className="grid gap-1.5 rounded-[12px] bg-muted/50 p-2.5" key={recipient.id}>
+                    <li className="grid gap-1.5 rounded-lg bg-muted/50 p-2.5" key={recipient.id}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{recipient.name}</p>
@@ -432,42 +495,72 @@ export function DocumentEditor({
             </Popover>
           ) : null
         }
-        menu={
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button aria-label="More" className="size-10" size="icon" title="More" type="button" variant="ghost">
-                  <MoreHorizontal />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem render={<a href={pdfHref} rel="noreferrer" target="_blank" />}>
-                <Download />
-                Download PDF
-              </DropdownMenuItem>
-              {completed ? null : (
-                <DropdownMenuItem render={<a href={`${pdfHref}?fillable=1`} rel="noreferrer" target="_blank" />}>
-                  <FilePen />
-                  Download fillable PDF
-                </DropdownMenuItem>
+        menu={(narrow) => {
+          // A completed document keeps Export as its main action, and has nothing left to preview.
+          const folded = narrow && !completed
+
+          return (
+            <>
+              {folded || more ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button aria-label="More" className="size-10" size="icon" title="More" type="button" variant="ghost">
+                        <MoreHorizontal />
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end" className="w-52">
+                    {canShare ? (
+                      <DropdownMenuItem onClick={() => setSharing(true)}>
+                        <UserPlus />
+                        Share…
+                      </DropdownMenuItem>
+                    ) : null}
+                    {offers.copy ? (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const data = new FormData()
+                          data.set("documentId", document.id)
+                          void copyAction(data)
+                        }}
+                      >
+                        <Copy />
+                        Edit a copy
+                      </DropdownMenuItem>
+                    ) : null}
+                    {/* Answers are kept as a template's submissions, so it needs one. */}
+                    {canSend && document.templateId ? (
+                      <DropdownMenuItem onClick={() => setAsking(true)}>
+                        <Send />
+                        Send to answer…
+                      </DropdownMenuItem>
+                    ) : null}
+                    {folded ? (
+                      <>
+                        {more ? <DropdownMenuSeparator /> : null}
+                        <DropdownMenuItem onClick={() => void openPreview()}>
+                          <Eye />
+                          Preview
+                        </DropdownMenuItem>
+                        <ExportMenuItems heading links={exports} />
+                      </>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+              {narrow || completed ? null : (
+                <>
+                  <ExportMenu links={exports} />
+                  <Button className="h-10 px-4" onClick={() => void openPreview()} type="button" variant="outline">
+                    <Eye />
+                    Preview
+                  </Button>
+                </>
               )}
-              {canShare ? (
-                <DropdownMenuItem onClick={() => setSharing(true)}>
-                  <UserPlus />
-                  Share…
-                </DropdownMenuItem>
-              ) : null}
-              {/* Answers are kept as a template's submissions, so it needs one. */}
-              {canSend && document.templateId ? (
-                <DropdownMenuItem onClick={() => setAsking(true)}>
-                  <Send />
-                  Send to answer…
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        }
+            </>
+          )
+        }}
         onRedo={history.redo}
         onRetrySave={() => {
           void (live.session ? live.session.flush() : content.flush())
@@ -511,7 +604,8 @@ export function DocumentEditor({
                   initialMessages={[]}
                   lastAppliedMessageId={flowUndo?.messageId ?? null}
                   onApplyProposal={applyProposal}
-                  onProposalReceived={(next) => {
+                  onProposalReceived={(next, messageId) => {
+                    proposalMessage.current = messageId
                     setProposal(next)
                     controller.select(null)
                   }}
@@ -524,6 +618,28 @@ export function DocumentEditor({
                     }
                   }}
                   autoSend={carried}
+                  fill={
+                    fillable
+                      ? {
+                          action: async (values) => {
+                            // Every answer was saved just now; one changed while the fill is away stays as typed.
+                            const before = answersRef.current
+                            const result = await fillAnswersAction(document.id, values)
+                            const filled = result.ok ? result.answers : undefined
+
+                            if (filled) {
+                              setAnswers((current) => mergeFilledAnswers(before, current, filled))
+                              setSavedAnswers(filled)
+                            }
+
+                            return result
+                          },
+                          here: true,
+                        }
+                      : undefined
+                  }
+                  onSaveFirst={readyToFill}
+                  organizationId={writable ? document.organizationId : undefined}
                   pendingProposal={proposal}
                   starter={writable ? DRAFT_STARTER : SENT_STARTER}
                 />
@@ -533,15 +649,14 @@ export function DocumentEditor({
         )}
         primary={
           completed ? (
-            <a className={cn(buttonVariants(), "h-10 px-4")} href={pdfHref} rel="noreferrer" target="_blank">
-              <Download />
-              Download
-            </a>
+            <ExportMenu links={exports} primary />
           ) : canSend && view.recipients.length === 0 ? (
             <Button className="h-10 px-4" onClick={() => void openSend()} type="button">
               <Send />
               Send
             </Button>
+          ) : offers.edit ? (
+            <EditSentDocumentButton action={cancelSigningAction} documentId={document.id} signedCount={signedCount} />
           ) : null
         }
         saveStatus={writable || fillable ? saveStatus : null}
@@ -566,10 +681,13 @@ export function DocumentEditor({
                 documentTitle={proposal ? proposal.candidateDraft.title : page.title}
                 fields={fillable && !proposal ? "fill" : "read"}
                 narrow={narrow}
-                onAnswerChange={(fieldKey, value) =>
-                  setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value))
+                onAnswerChange={(fieldKey, value, settle) =>
+                  setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value, settle))
                 }
                 overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={page.content} room={room} /> : null}
+                // Once the room's copy is the one on screen (or there is none), so the
+                // line the cursor starts in isn't swapped out from under it.
+                startTyping={startTyping && (history.liveStatus !== null || live.unavailable)}
                 textEditable={editable && !proposal}
                 zoom={zoom}
               />

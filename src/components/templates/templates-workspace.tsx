@@ -2,6 +2,7 @@ import { Plus } from "lucide-react"
 import Link from "next/link"
 import type { CSSProperties, ReactElement, ReactNode } from "react"
 
+import { createTemplateAction } from "@/app/(dashboard)/templates/actions"
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
 import { ListQuery } from "@/components/data/list-query"
@@ -10,6 +11,7 @@ import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-m
 import {
   getTemplateStatusOptions,
   getTemplateViewMenuSections,
+  isTemplateTrashView,
   isTemplateViewAdjusted,
   templateListState,
   type TemplateListView,
@@ -23,14 +25,17 @@ import {
 } from "@/components/templates/template-selection"
 import { LocalDate } from "@/components/ui/local-date"
 import { buttonVariants } from "@/components/ui/button"
+import { OneClickForm } from "@/components/ui/one-click-form"
 import { cn } from "@/lib/utils"
 import type { DocumentTemplateCard, DocumentTemplateStatus } from "@/types/template"
+import { TEMPLATE_TRASH_RETENTION_DAYS } from "@/types/template-trash"
 
 const TEMPLATES_PATH = "/templates"
 
 /** Cards rise in one after another; later cards share the last step's delay. */
 const MAX_STAGGERED_CARDS = 10
 const CARD_STAGGER_MS = 30
+const DAY_MS = 86_400_000
 
 const STATUS_LOOKS: Record<DocumentTemplateStatus, { dot: string; label: string }> = {
   archived: { dot: "bg-destructive", label: "Archived" },
@@ -94,16 +99,16 @@ export function TemplatesWorkspace({
             views={listViews}
           />
           {canCreate ? (
-            <Link
+            <OneClickForm
+              action={createTemplateAction}
               className={cn(
                 buttonVariants(),
-                "h-11 rounded-[12px] px-4 font-normal"
+                "h-11 rounded-lg px-4 font-normal"
               )}
-              href="/templates/new"
             >
               <Plus aria-hidden="true" data-icon="inline-start" />
               <span className="max-sm:sr-only">Create template</span>
-            </Link>
+            </OneClickForm>
           ) : null}
         </div>
       </div>
@@ -115,16 +120,23 @@ export function TemplatesWorkspace({
         />
       ) : null}
 
-      {canManage ? (
+      {/* Statuses are for those who manage templates; someone who only makes their own still reaches Trash. */}
+      {canManage || canCreate ? (
         <ListFilterChips
           glide
           label="Filter templates by status"
-          options={getTemplateStatusOptions(view)}
+          options={getTemplateStatusOptions(view, canManage ? undefined : ["trash"])}
         />
       ) : null}
 
       {templates.length === 0 && !offersNew ? (
-        <ListEmpty>{filtered ? "No templates match this view." : "No templates yet."}</ListEmpty>
+        <ListEmpty>
+          {isTemplateTrashView(view) && !view.query && !view.filters.category
+            ? "Trash is empty."
+            : filtered
+              ? "No templates match this view."
+              : "No templates yet."}
+        </ListEmpty>
       ) : (
         <SelectableLibrary canCreate={canCreate} categories={categories} templates={templates}>
           <ul
@@ -188,7 +200,13 @@ function SelectableLibrary({
       categories={categories}
       templates={templates
         .filter((template) => actsOn(template, canCreate))
-        .map((template) => ({ canDuplicate: canCreate, canEdit: template.canEdit, id: template.id, status: template.status }))}
+        .map((template) => ({
+          canDuplicate: canCreate,
+          canEdit: template.canEdit,
+          id: template.id,
+          status: template.status,
+          trashed: template.trashedAt !== null,
+        }))}
     >
       {children}
       <TemplateSelectionBar />
@@ -202,13 +220,13 @@ const actsOn = (template: DocumentTemplateCard, canCreate: boolean): boolean => 
 function NewTemplateTile(): ReactElement {
   return (
     <li className="grid" data-slot="template-new">
-      <Link
-        className="group grid content-center justify-items-center gap-2.5 rounded-[12px] px-2.5 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
-        href="/templates/new"
+      <OneClickForm
+        action={createTemplateAction}
+        className="group grid cursor-pointer content-center justify-items-center gap-2.5 rounded-lg px-2.5 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
       >
         <span
           aria-hidden="true"
-          className="grid w-[96px] place-items-center rounded-[8px] border border-dashed border-muted-foreground/40 text-primary transition-colors group-hover:border-primary/60 sm:w-[150px] [&_svg]:size-6"
+          className="grid w-[96px] place-items-center rounded-md border border-dashed border-muted-foreground/40 text-primary transition-colors group-hover:border-primary/60 sm:w-[150px] [&_svg]:size-6"
           style={{ aspectRatio: "595 / 842" }}
         >
           <Plus />
@@ -216,7 +234,7 @@ function NewTemplateTile(): ReactElement {
         <span className="w-[96px] text-[11.5px] text-foreground sm:w-[150px] sm:text-sm">
           New template
         </span>
-      </Link>
+      </OneClickForm>
     </li>
   )
 }
@@ -238,10 +256,17 @@ function TemplateCard({
   const editable = template.canEdit && template.status !== "archived"
   const acts = actsOn(template, canCreate)
   // Statuses are for those who work on the template; everyone else sees what was published.
-  const showsStatus = canManage || template.canEdit
+  // In Trash, how long it has left says more than its status.
+  const showsStatus = (canManage || template.canEdit) && !template.trashedAt
   const status = STATUS_LOOKS[template.status]
-  const detail =
-    template.category ?? <>Updated <LocalDate value={template.updatedAt} /></>
+  // Trash says how long each one has left, as Files does.
+  const detail = template.trashedAt ? (
+    <>
+      Deletes on <LocalDate value={new Date(Date.parse(template.trashedAt) + TEMPLATE_TRASH_RETENTION_DAYS * DAY_MS).toISOString()} />
+    </>
+  ) : (
+    (template.category ?? <>Updated <LocalDate value={template.updatedAt} /></>)
+  )
   const riseDelay = {
     "--card-delay": `${Math.min(index, MAX_STAGGERED_CARDS) * CARD_STAGGER_MS}ms`,
   } as CSSProperties
@@ -252,7 +277,7 @@ function TemplateCard({
   return (
     <Card
       acts={acts}
-      className="relative grid grid-rows-[auto_1fr_auto] overflow-hidden rounded-[12px] border border-border bg-card/70 transition-[translate,box-shadow,border-color] duration-200 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--card-delay)] sm:hover:border-primary/35 sm:hover:shadow-[0_10px_24px_rgba(37,35,41,0.1)] sm:motion-safe:hover:-translate-y-0.5"
+      className="relative grid grid-rows-[auto_1fr_auto] overflow-hidden rounded-lg border border-border bg-card/70 transition-[translate,box-shadow,border-color] duration-200 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--card-delay)] sm:hover:border-primary/35 sm:hover:shadow-[0_10px_24px_rgba(37,35,41,0.1)] sm:motion-safe:hover:-translate-y-0.5"
       id={template.id}
       style={riseDelay}
     >
@@ -262,7 +287,7 @@ function TemplateCard({
           <Link
             className={cn(
               titleClassName,
-              "outline-none after:absolute after:inset-0 after:rounded-[12px] hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring/35"
+              "outline-none after:absolute after:inset-0 after:rounded-lg hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring/35"
             )}
             data-slot="template-title"
             href={`/templates/${encodeURIComponent(template.id)}/edit`}
@@ -285,11 +310,12 @@ function TemplateCard({
               status={template.status}
               templateId={template.id}
               title={template.title}
+              trashed={template.trashedAt !== null}
             />
           </div>
         ) : null}
       </div>
-      <div className="mx-1.5 grid justify-items-center overflow-hidden rounded-t-[8px] bg-card/45 pt-3 sm:pt-4">
+      <div className="mx-1.5 grid justify-items-center overflow-hidden rounded-t-md bg-card/45 pt-3 sm:pt-4">
         <TemplatePageThumbnail
           className={cn(
             "-mb-[18%]",
@@ -302,7 +328,7 @@ function TemplateCard({
       <div
         className={cn(
           "flex min-w-0 items-center gap-1.5 border-t border-border/60 px-2.5 py-2 text-[10.5px] text-muted-foreground sm:px-3.5 sm:py-2.5 sm:text-xs",
-          editable && "max-sm:pr-10"
+          acts && "max-sm:pr-10"
         )}
         data-slot="template-meta"
       >

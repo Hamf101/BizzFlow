@@ -12,6 +12,7 @@ export { createDocumentReplacementUploadUrl } from "@/services/documents/version
 export {
   completeDocumentUpload,
   createDocumentUploadUrl,
+  discardPendingDocumentUpload,
 } from "@/services/documents/version-upload-service"
 export {
   createFolder,
@@ -38,6 +39,7 @@ export {
   type GuestDocument,
 } from "@/services/documents/guest-service"
 export { moveDocument, moveFolder } from "@/services/documents/move-service"
+export { cleanupAbandonedDocumentUploads } from "@/services/documents/upload-cleanup-service"
 export {
   processDueResourcePurges,
   requestDocumentPurge,

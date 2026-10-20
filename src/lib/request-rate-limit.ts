@@ -40,7 +40,8 @@ export async function limitRequestByIp(request: Request, deps: Deps = {}): Promi
 /**
  * Spends a signed-in member's budget for what has no bucket of its own: every
  * API call, and every server action (a POST to a page). Rendering a page is
- * not counted. Exports get a smaller budget because each reads a whole list.
+ * not counted. Exports get a smaller budget because each reads a whole list,
+ * and search one of its own because it asks as the member types.
  *
  * @param request - The incoming request.
  * @param userId - The verified member.
@@ -59,7 +60,11 @@ export async function limitRequestByMember(
     return null
   }
 
-  const bucket = pathname.startsWith("/api/export/") ? "member_export" : "member_request"
+  const bucket = pathname.startsWith("/api/export/")
+    ? "member_export"
+    : pathname === "/api/search"
+      ? "member_search"
+      : "member_request"
 
   return spend(request, deps.check ?? defaultCheck, bucket, userId)
 }
@@ -67,7 +72,7 @@ export async function limitRequestByMember(
 async function spend(
   request: Request,
   check: CheckRateLimit,
-  bucket: "request_ip" | "member_request" | "member_export",
+  bucket: "request_ip" | "member_request" | "member_search" | "member_export",
   key: string
 ): Promise<Response | null> {
   try {

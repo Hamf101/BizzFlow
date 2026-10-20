@@ -48,11 +48,14 @@ type EditorFrameProps = {
   canRedo: boolean
   canUndo: boolean
   children: (view: { narrow: boolean; zoom: number }) => ReactNode
-  dock: (narrow: boolean, orientation: DockOrientation) => ReactNode
+  dock?: (narrow: boolean, orientation: DockOrientation) => ReactNode
   extra?: ReactNode
+  /** The children fill the screen under the top bar and scroll themselves, as a sheet's grid does: no page, dock or zoom. */
+  fill?: boolean
   /** Where the tools were left last time; without it they start at home each visit. */
   layout?: EditorLayoutStore
-  menu?: ReactNode
+  /** The top bar's actions before the primary one; a phone may fold some into a menu. */
+  menu?: ReactNode | ((narrow: boolean) => ReactNode)
   onRedo: () => void
   onRetrySave?: () => void
   /** What ⌘S or Ctrl+S keeps, rather than the browser saving the page. */
@@ -60,7 +63,7 @@ type EditorFrameProps = {
   onTitleChange: (title: string) => void
   onUndo: () => void
   /** The page's width in printed points, which Fit zooms to. */
-  pageWidthPoints: number
+  pageWidthPoints?: number
   panel?: (narrow: boolean) => ReactNode
   /** Who else is here. */
   people?: (narrow: boolean) => ReactNode
@@ -69,6 +72,8 @@ type EditorFrameProps = {
   saveStatus: AutosaveStatus | "blocked" | "stopped" | "unsaved-local" | null
   title: string
   titleEditable: boolean
+  /** Muted after the title, such as a sheet's ".xlsx". */
+  titleSuffix?: string
   /** The formatting toolbar, floating at the top of the canvas on a laptop. */
   toolbar?: ReactNode
 }
@@ -89,6 +94,7 @@ export function EditorFrame({
   children,
   dock,
   extra,
+  fill = false,
   layout: layoutStore,
   menu,
   onRedo,
@@ -96,13 +102,14 @@ export function EditorFrame({
   onSave,
   onTitleChange,
   onUndo,
-  pageWidthPoints,
+  pageWidthPoints = 0,
   panel,
   people,
   primary,
   saveStatus,
   title,
   titleEditable,
+  titleSuffix,
   toolbar,
 }: EditorFrameProps): ReactElement {
   const narrow = useMediaQuery(NARROW)
@@ -178,7 +185,7 @@ export function EditorFrame({
         } else {
           onUndo()
         }
-      } else if (narrow) {
+      } else if (narrow || fill) {
         // The page has no zoom of its own on a phone's column: the browser's zoom stays the browser's.
         return
       } else if (key === "=" || key === "+" || key === "-") {
@@ -192,7 +199,7 @@ export function EditorFrame({
 
     document.addEventListener("keydown", handleKey)
     return () => document.removeEventListener("keydown", handleKey)
-  }, [narrow, onRedo, onSave, onUndo, zoom])
+  }, [fill, narrow, onRedo, onSave, onUndo, zoom])
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-foreground" data-slot="editor">
@@ -207,7 +214,7 @@ export function EditorFrame({
         </Link>
         <input
           aria-label="Title"
-          className="h-9 min-w-0 truncate rounded-[9px] bg-transparent px-2 text-[15px] font-medium outline-none transition-colors hover:bg-muted/70 focus:bg-card focus-visible:ring-2 focus-visible:ring-ring/35 disabled:hover:bg-transparent"
+          className="h-9 min-w-0 truncate rounded-sm bg-transparent px-2 text-[15px] font-medium outline-none transition-colors hover:bg-muted/70 focus:bg-card focus-visible:ring-2 focus-visible:ring-ring/35 disabled:hover:bg-transparent"
           disabled={!titleEditable}
           maxLength={180}
           onChange={(event) => onTitleChange(event.target.value)}
@@ -219,6 +226,7 @@ export function EditorFrame({
           style={{ width: `min(${Math.max(6, title.length + 2)}ch, 42vw)` }}
           value={title}
         />
+        {titleSuffix ? <span className="-ml-2 shrink-0 text-[15px] text-muted-foreground">{titleSuffix}</span> : null}
         <SaveStatus onRetry={onRetrySave} status={saveStatus} />
         <span className="grow" />
         {people?.(narrow)}
@@ -252,21 +260,33 @@ export function EditorFrame({
             </Button>
           </>
         ) : null}
-        {menu}
+        {typeof menu === "function" ? menu(narrow) : menu}
         {primary}
       </header>
       {/* An open panel takes its own column on a laptop, so it never covers the
           page; Fit follows because the scroll area's width changes. */}
+      {/* A phone has no room to float a notice over what is being typed, so it
+          takes a line of its own above the page. */}
+      {narrow && banner ? <div className="flex justify-center px-3 py-2">{banner}</div> : null}
+      {fill ? (
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {children({ narrow, zoom: 1 })}
+          {!narrow && banner ? (
+            <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center px-4">{banner}</div>
+          ) : null}
+          {panel?.(narrow)}
+        </div>
+      ) : (
       <div className="group/stage relative min-h-0 flex-1">
         {/* The page scrolls under the toolbar, with any notice just below it. */}
-        {(toolbar && !narrow) || banner ? (
+        {!narrow && (toolbar || banner) ? (
           <div
             className={cn(
               "pointer-events-none absolute inset-x-0 top-3 z-30 flex flex-col items-center gap-2 px-4",
               !narrow && "group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[23.5rem]"
             )}
           >
-            {narrow ? null : toolbar}
+            {toolbar}
             {banner}
           </div>
         ) : null}
@@ -292,7 +312,7 @@ export function EditorFrame({
           )}
           data-slot="editor-tools"
         >
-          {!sized ? null : narrow ? (
+          {!sized || !dock ? null : narrow ? (
             <div className="pointer-events-auto absolute right-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] left-2 flex">
               {dock(true, "flat")}
             </div>
@@ -369,6 +389,7 @@ export function EditorFrame({
         </div>
         {panel?.(narrow)}
       </div>
+      )}
     </div>
   )
 }
@@ -450,7 +471,8 @@ export function EditorSidePanel({
     <aside
       aria-label={title}
       className={cn(
-        "absolute z-30 flex flex-col overflow-hidden rounded-[18px] border border-border bg-popover text-popover-foreground shadow-xl",
+        // Slides in from the side it sits on, so it reads as arriving, not appearing.
+        "absolute z-30 flex flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl animate-in fade-in slide-in-from-right-3 duration-200 ease-out",
         narrow ? "inset-x-2 top-2 bottom-2" : "top-3 right-3 max-h-[calc(100%-1.5rem)] w-[22rem]"
       )}
       data-slot="editor-panel"
@@ -483,7 +505,8 @@ function SaveStatus({
     "unsaved-local": "Unsaved",
     conflict: "Changed elsewhere",
     error: "Not saved",
-    offline: "Offline",
+    // Unsent changes wait on this device and go out when it reconnects.
+    offline: "Offline, kept on this device",
     saved: "Saved",
     saving: "Saving…",
     stopped: "Editing stopped",

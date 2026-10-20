@@ -19,6 +19,8 @@ export type DocumentSigningRecipient = {
   invitedAt: string
   viewedAt: string | null
   signedAt: string | null
+  consentedAt: string | null
+  signedIp: string | null
   signatureDataUrl: string | null
   initialsDataUrl: string | null
 }
@@ -35,7 +37,12 @@ type SigningViewBase = {
 export type MemberDocumentSigningView = SigningViewBase & {
   guest?: undefined
   recipients: DocumentSigningRecipient[]
+  /** The signer who turned the last round down, until the document is sent again. */
+  declined?: SigningDecline | null
 }
+
+/** Who declined to sign, why, and when. */
+export type SigningDecline = { name: string; reason: string; declinedAt: string }
 
 /** A generated document as a member or a guest may read it. */
 export type GeneratedDocumentSigningView =
@@ -90,4 +97,6 @@ export type SendDocumentForSigningResult = {
   documentId: string
   workflowStatus: "awaiting_signatures"
   recipients: DocumentSigningRecipient[]
+  /** How many invitation emails could not be sent; each can be resent. */
+  undelivered: number
 }

@@ -29,6 +29,25 @@ test("search arrives at what it found without reloading the document", async ({
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeline)
 })
 
+test("search shows what was just opened before a letter is typed, and answers the first letter", async ({ pageAs }) => {
+  const page = await pageAs("manager")
+  await page.goto("/dashboard")
+  // Kept once the server answers; leaving on the request alone could cancel it.
+  const opened = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/opened"))
+  await page.getByRole("button", { name: "New document" }).click()
+  await page.waitForURL(/\/documents\/[0-9a-f-]+\/edit/)
+  const documentId = new URL(page.url()).pathname.split("/")[2] as string
+  expect((await opened).status(), "the visit is recorded").toBeLessThan(300)
+
+  await page.goto("/dashboard")
+  const search = await openSearch(page)
+  // Nothing typed: the document just opened is already there.
+  await expect(search.locator(`[role="option"][href*="${documentId}"]`)).toBeVisible()
+
+  await search.getByRole("combobox", { name: "Search" }).fill("U")
+  await expect(search.locator(`[role="option"][href*="${documentId}"]`)).toBeVisible()
+})
+
 test("returns to a list where it was left, filters and all", async ({
   admin,
   pageAs,

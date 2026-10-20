@@ -69,7 +69,9 @@ class FakeQuery implements PromiseLike<FakeResult> {
   }
 
   is(column: string, value: unknown): FakeQuery {
-    return this.eq(column, value)
+    // A nullable column the row was seeded without is null, as in the database.
+    this.filters.push((row: FakeRow): boolean => (row[column] ?? null) === value)
+    return this
   }
 
   in(column: string, values: readonly unknown[]): FakeQuery {
@@ -109,7 +111,9 @@ class FakeQuery implements PromiseLike<FakeResult> {
       const payloads = Array.isArray(this.payload)
         ? this.payload
         : [this.payload ?? {}]
+      // Columns the database fills on insert.
       const rows = payloads.map((payload: FakeRow): FakeRow => ({
+        ...(this.tableName === "documents" ? { lifecycle_state: "active" } : {}),
         ...payload
       }))
       table.push(...rows)
@@ -242,12 +246,21 @@ export class FakeClient {
       return { data: { ...(answer.values as FakeRow) }, error: null }
     }
 
+    if (functionName === "cancel_document_signing") {
+      return this.cancelDocumentSigning(args)
+    }
+
+    if (functionName === "decline_document_signing") {
+      return this.declineDocumentSigning(args)
+    }
+
     if (functionName !== "complete_document_recipient_signature") {
       throw new Error(`Unsupported fake RPC: ${functionName}`)
     }
 
     const recipient = this.tables.document_signing_recipients.find(
       (row: FakeRow): boolean =>
+        isCurrentRecipient(row) &&
         row.id === args.target_recipient_id &&
         row.document_id === args.target_document_id &&
         row.org_id === args.target_org_id &&
@@ -268,6 +281,9 @@ export class FakeClient {
     recipient.signed_at = NOW.toISOString()
     recipient.signature_data = args.target_signature_data
     recipient.initials_data = args.target_initials_data
+    // As the function does: consent and the address are kept with the signature.
+    recipient.consented_at = args.target_consented ? NOW.toISOString() : null
+    recipient.signed_ip = typeof args.target_ip === "string" && args.target_ip.trim() ? args.target_ip.trim().slice(0, 64) : null
     answer.values = mergeVisibleDocumentAnswers(
       this.tables,
       args,
@@ -276,6 +292,7 @@ export class FakeClient {
     const hasPendingRequiredRecipient =
       this.tables.document_signing_recipients.some(
         (row: FakeRow): boolean =>
+          isCurrentRecipient(row) &&
           row.document_id === args.target_document_id &&
           row.org_id === args.target_org_id &&
           row.requires_signature === true &&
@@ -287,6 +304,54 @@ export class FakeClient {
 
     return { data: answer.workflow_status, error: null }
   }
+
+  // As decline_document_signing: the decliner's live link, then a cancel.
+  private declineDocumentSigning(args: Record<string, unknown>): FakeResult {
+    const recipient = this.tables.document_signing_recipients.find(
+      (row: FakeRow): boolean => isCurrentRecipient(row) && row.id === args.target_recipient_id && row.token_hash === args.target_token_hash
+    )
+
+    if (!recipient) {
+      return { data: null, error: { code: "P0002", message: "Signing link was not found." } }
+    }
+
+    if (recipient.status === "signed") {
+      return { data: null, error: { code: "23514", message: "A signer who signed cannot decline." } }
+    }
+
+    const revoked = this.cancelDocumentSigning(args)
+
+    if (!revoked.error) {
+      Object.assign(recipient, { status: "declined", declined_at: NOW.toISOString(), decline_reason: args.target_reason })
+    }
+
+    return revoked
+  }
+
+  // As cancel_document_signing: under the answer row, only while awaiting signatures.
+  private cancelDocumentSigning(args: Record<string, unknown>): FakeResult {
+    const answer = this.tables.document_answers.find(
+      (row: FakeRow): boolean => row.document_id === args.target_document_id && row.org_id === args.target_org_id
+    )
+
+    if (answer?.workflow_status !== "awaiting_signatures") {
+      return { data: null, error: { code: "23514", message: "Only a document awaiting signatures can be taken back." } }
+    }
+
+    answer.workflow_status = "draft"
+    const revoked = this.tables.document_signing_recipients.filter(
+      (row: FakeRow): boolean => isCurrentRecipient(row) && row.document_id === args.target_document_id && row.org_id === args.target_org_id
+    )
+    revoked.forEach((row: FakeRow): void => {
+      row.revoked_at = NOW.toISOString()
+    })
+
+    return { data: revoked.map(({ email, id, name, status }: FakeRow) => ({ email, id, name, status })), error: null }
+  }
+}
+
+function isCurrentRecipient(row: FakeRow): boolean {
+  return (row.revoked_at ?? null) === null
 }
 
 function mergeVisibleDocumentAnswers(
@@ -383,7 +448,9 @@ export function createBaseTables(): FakeTables {
 export function createTemplateContent(
   options: { requiredInitials?: boolean } = {}
 ): TemplateContent {
-  const content = createBlankTemplateContent()
+  const blank = createBlankTemplateContent()
+  // At the preset margins, so a layout's marginPreset is what decides them.
+  const content = { ...blank, layout: { ...blank.layout, margins: undefined } }
   const bodyBlocks: TemplateBlock[] = [
     {
       id: "50000000-0000-4000-8000-000000000001",
@@ -444,7 +511,11 @@ export function createRecipientRow(
     viewed_at: null,
     signed_at: null,
     signature_data: null,
-    initials_data: null
+    initials_data: null,
+    consented_at: null,
+    signed_ip: null,
+    declined_at: null,
+    decline_reason: null, revoked_at: null, sent_by: null,
   }
 }
 

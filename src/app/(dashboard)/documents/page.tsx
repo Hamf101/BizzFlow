@@ -48,6 +48,7 @@ import {
   trashDocumentAction,
   trashFolderAction,
 } from "./actions"
+import { createSheetAction } from "@/app/(editor)/documents/[documentId]/edit/sheet-actions"
 import type { Metadata } from "next"
 
 /**
@@ -145,6 +146,7 @@ export default async function FilesPage({
           archiveDocument: archiveDocumentAction,
           archiveFolder: archiveFolderAction,
           createFolder: createFolderAction,
+          createSheet: createSheetAction,
           requestDocumentPurge: requestDocumentPurgeAction,
           requestFolderPurge: requestFolderPurgeAction,
           restoreDocument: restoreDocumentAction,
@@ -252,7 +254,8 @@ async function loadCards(
   }
 
   try {
-    const cards = await listDocumentCards({ actorUserId, organizationId, ...request })
+    // Files' menus offer Open in Flow by an upload's type.
+    const cards = await listDocumentCards({ actorUserId, organizationId, ...request, withContentTypes: true })
 
     return new Map(cards.map((card: DocumentCard) => [card.id, card]))
   } catch (error: unknown) {

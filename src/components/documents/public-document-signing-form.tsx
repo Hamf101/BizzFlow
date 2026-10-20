@@ -159,13 +159,15 @@ export function PublicDocumentSigningForm({
               name="initialsDataUrl"
               required={requiresInitials}
             />
-            <Alert>
-              <AlertTitle>Basic electronic acknowledgement</AlertTitle>
-              <AlertDescription>
-                A drawing here is a basic acknowledgement, not a qualified or
-                regulated electronic signature.
-              </AlertDescription>
-            </Alert>
+            {/* Consent to sign electronically, kept with the signature for its certificate. */}
+            <label className="flex items-start gap-3 text-sm leading-snug">
+              <input className="mt-0.5 size-4 shrink-0 accent-primary" name="consent" required type="checkbox" />
+              <span>
+                I agree to sign electronically. My drawn signature counts as my
+                handwritten one, I&apos;ll get a copy once everyone has signed,
+                and I can ask the sender for a paper copy instead.
+              </span>
+            </label>
           </CardContent>
           <CardFooter className="justify-between gap-3">
             <span className="text-xs text-muted-foreground">

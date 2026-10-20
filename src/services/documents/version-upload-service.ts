@@ -2,6 +2,7 @@ import { canPerformOrganizationAction } from "@/lib/permissions"
 import {
   buildDocumentObjectKey as defaultBuildDocumentObjectKey,
   createSignedDocumentUploadUrl as defaultCreateSignedDocumentUploadUrl,
+  deleteDocumentStorageObject as defaultDeleteDocumentStorageObject,
   validateDocumentUploadRequest as defaultValidateDocumentUploadRequest,
   verifyDocumentUpload as defaultVerifyDocumentUpload,
 } from "@/services/document-storage-service"
@@ -11,6 +12,7 @@ import {
 } from "@/services/documents/access-service"
 import { recordDocumentAuditLog } from "@/services/documents/audit"
 import type {
+  ArchiveDocumentInput,
   CompleteDocumentUploadInput,
   CreateDocumentUploadUrlInput,
   DocumentServiceClient,
@@ -259,10 +261,11 @@ export async function completeDocumentUpload(
         )
       }
 
-      // A generated document's versions are its finalized paper alone.
-      if (document.sourceKind === "generated") {
+      // A generated document's versions are its finalized paper alone, and a
+      // sheet's cells live in the document itself.
+      if (document.sourceKind !== "upload") {
         throw new DocumentServiceError(
-          "A generated document cannot take an uploaded file.",
+          "Only an uploaded file can take a new upload.",
           409
         )
       }
@@ -340,6 +343,72 @@ export async function completeDocumentUpload(
       )
     }
   ).then(toClientFile)
+}
+
+/**
+ * Takes back a member's own new document whose first upload never completed,
+ * as when they stop it partway: the document and its pending version go, and
+ * any bytes that reached storage after them. A document with a completed
+ * version, someone else's, or one in another workspace is not found.
+ *
+ * @param input - Actor, organization, and document identifiers.
+ * @param deps - Optional service dependencies for tests.
+ * @throws DocumentServiceError 403 without the right to add documents, 404 when there is no such upload.
+ */
+export async function discardPendingDocumentUpload(
+  input: ArchiveDocumentInput,
+  deps: DocumentServiceDeps = {}
+): Promise<void> {
+  return runDocumentOperation("discard_pending_document_upload", input, async (): Promise<void> => {
+    const client = getClient(deps)
+
+    await requirePermission(client, input.organizationId, input.actorUserId, "documents:create", "You cannot create documents.")
+
+    const { data: versions, error: versionError } = await client
+      .from("document_versions")
+      .select("storage_key")
+      .eq("document_id", input.documentId)
+      .eq("org_id", input.organizationId)
+      .eq("status", "upload_pending")
+
+    if (versionError) {
+      throw createSupabaseServiceError(versionError, "Unable to discard the upload.")
+    }
+
+    // One statement, so an upload completing at the same moment keeps its document.
+    const { data: discarded, error } = await client
+      .from("documents")
+      .delete()
+      .eq("id", input.documentId)
+      .eq("org_id", input.organizationId)
+      .eq("created_by", input.actorUserId)
+      .eq("source_kind", "upload")
+      .eq("lifecycle_state", "active")
+      .is("current_version_id", null)
+      .select("id,title")
+
+    if (error) {
+      throw createSupabaseServiceError(error, "Unable to discard the upload.")
+    }
+
+    if (!discarded?.length) {
+      throw new DocumentServiceError("Pending upload was not found.", 404)
+    }
+
+    // ponytail: best effort; bytes a stopped PUT lands after this stay unreferenced in the private bucket until a sweep exists.
+    for (const { storage_key: storageKey } of (versions ?? []) as Array<{ storage_key: string }>) {
+      await (deps.deleteDocumentStorageObject ?? defaultDeleteDocumentStorageObject)({ storageKey }).catch(() => undefined)
+    }
+
+    await recordDocumentAuditLog(deps, {
+      organizationId: input.organizationId,
+      actorUserId: input.actorUserId,
+      action: "document.purged",
+      targetType: "document",
+      targetId: input.documentId,
+      metadata: { title: String(discarded[0]?.title ?? ""), uploadDiscarded: true },
+    })
+  })
 }
 
 async function insertDocument(

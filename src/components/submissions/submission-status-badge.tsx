@@ -5,18 +5,19 @@ import type { SubmissionStatus } from "@/types/submission"
 
 type SubmissionStatusPresentation = {
   label: string
-  variant: "default" | "secondary" | "destructive" | "outline"
+  variant: "accent" | "default" | "destructive" | "outline" | "secondary" | "success" | "warning"
 }
 
 const SUBMISSION_STATUS_PRESENTATIONS: Record<
   SubmissionStatus,
   SubmissionStatusPresentation
 > = {
-  draft: { label: "Draft", variant: "secondary" },
-  submitted: { label: "Submitted", variant: "default" },
-  in_review: { label: "In review", variant: "outline" },
-  needs_changes: { label: "Needs changes", variant: "destructive" },
-  approved: { label: "Approved", variant: "default" },
+  // One look per status: no two read alike at a glance.
+  draft: { label: "Draft", variant: "outline" },
+  submitted: { label: "Submitted", variant: "accent" },
+  in_review: { label: "In review", variant: "default" },
+  needs_changes: { label: "Needs changes", variant: "warning" },
+  approved: { label: "Approved", variant: "success" },
   rejected: { label: "Rejected", variant: "destructive" },
   completed: { label: "Completed", variant: "secondary" },
 }

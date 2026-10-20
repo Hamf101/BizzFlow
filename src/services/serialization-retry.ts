@@ -2,7 +2,7 @@
 const SERIALIZATION_FAILURE = "40001"
 
 /** Attempts before a collision is reported rather than retried. */
-const MAX_ATTEMPTS = 7
+export const MAX_ATTEMPTS = 7
 
 /** What a member sees when a write keeps meeting concurrent changes. */
 export const CONCURRENT_CHANGE_MESSAGE =
@@ -58,7 +58,8 @@ export async function retrySerializationFailure<TResult extends { error: unknown
   return result
 }
 
-function waitBeforeRetry(attempt: number): Promise<void> {
+/** A random share of a window doubling from 50 ms (full jitter), so writers that collided spread out. */
+export function waitBeforeRetry(attempt: number): Promise<void> {
   return new Promise<void>((resolve) => {
     // ponytail: Math.random, not an injected source; tests stub it, and only the spread matters.
     setTimeout(resolve, Math.random() * 50 * 2 ** (attempt - 1))

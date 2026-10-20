@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import {
   createSortSection,
@@ -7,9 +7,10 @@ import {
   type ListSortOption,
 } from "@/components/data/list-option"
 import { defineListState, formatListSort } from "@/lib/list-state"
-import type {
-  AccessibleDocumentFolder,
-  AccessibleDocumentSummary,
+import {
+  opensInEditor,
+  type AccessibleDocumentFolder,
+  type AccessibleDocumentSummary,
 } from "@/types/document"
 import type { GeneratedDocumentWorkflowStatus } from "@/types/template"
 
@@ -303,8 +304,9 @@ export function getChosenItemId(
 }
 
 /**
- * Names the documents a layout shows a status for, and the ones whose first
- * page it draws. Only generated documents have either.
+ * Names the documents a layout shows a card for, a generated document's
+ * status or an upload's file type, and the ones whose first page it draws,
+ * which only generated documents have.
  *
  * @param layout - The layout being drawn.
  * @param view - Current Files view.
@@ -347,24 +349,25 @@ export function getCardRequest(
         : layout === "columns"
           ? chosenPage
           : [...new Set([...chosenPage, ...pagesHere])].slice(0, MAX_FILE_PAGES),
-    documentIds: generated(shown),
+    documentIds: shown.map((document: AccessibleDocumentSummary): string => document.id),
   }
 }
 
 /**
- * Links to a document. A generated document opens as a preview, to look at
- * and try, with Edit from there; one in the bin opens its page, to restore.
+ * Links to a document. A generated document or a sheet opens in the editor,
+ * which shows those who may not change it a preview or a read-only grid; one
+ * in the bin opens its page, to restore.
  *
  * @param document - The document to open.
- * @returns The document's page or preview link.
+ * @returns The document's page or editor link.
  */
 export function getDocumentHref(
   document: Pick<AccessibleDocumentSummary, "id" | "lifecycleState" | "sourceKind">
 ): string {
   const documentId = encodeURIComponent(document.id)
 
-  return document.sourceKind === "generated" && (document.lifecycleState === "active" || document.lifecycleState === "archived")
-    ? `/documents/${documentId}/preview`
+  return opensInEditor(document)
+    ? `/documents/${documentId}/edit`
     : `/documents/${documentId}`
 }
 
@@ -431,13 +434,13 @@ export function selectLocation(
 }
 
 /**
- * Names what a document is: a filled-in document or an uploaded file.
+ * Names what a document is: a filled-in document, a sheet or an uploaded file.
  *
  * @param document - The document to describe.
- * @returns Document or File.
+ * @returns Document, Sheet or File.
  */
 export function describeDocumentKind(document: AccessibleDocumentSummary): string {
-  return document.sourceKind === "generated" ? "Document" : "File"
+  return document.sourceKind === "generated" ? "Document" : document.sourceKind === "sheet" ? "Sheet" : "File"
 }
 
 /** How a Files view marks where a generated document stands. */

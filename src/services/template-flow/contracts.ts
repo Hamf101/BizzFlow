@@ -1,9 +1,9 @@
-import { z } from "zod"
+import * as z from "zod"
 import { uuidSchema } from "@/types/schemas"
 
 import { type AdminSupabaseClient } from "@/lib/supabase/admin"
 import { flowModelSchema } from "@/services/ai/approved-models"
-import { type AiModelReference, type AiRuntime, type AiTokenUsage } from "@/services/ai/contracts"
+import { type AiAttachment, type AiModelReference, type AiRuntime, type AiTokenUsage } from "@/services/ai/contracts"
 import { TEMPLATE_FLOW_OPERATION_TYPES } from "@/services/template-ai/flow-response-schema"
 import {
   bulletListBlockObjectSchema,
@@ -22,6 +22,7 @@ import {
   templateContentSchema,
   templateContentV3Schema,
   templateFieldGroupSchema,
+  templateFieldVisibilitySchema,
   templateLayoutSchema,
   textRunSchema,
   textFieldBlockObjectSchema,
@@ -84,6 +85,21 @@ export const editableFlowDraftSchema = flowDraftSchema
   .extend({ content: templateContentV3Schema })
   .strict()
 
+/** What Flow is doing right now, told to the member while they wait. */
+export type FlowStage = "reading" | "writing" | "checking" | "tidying" | "thinking" | "finding"
+
+export const FLOW_MENTION_KINDS = ["templates", "submissions", "tasks", "files", "people"] as const
+
+/** What a member points Flow at with @: at most five items, each once. */
+export const flowMentionsSchema = z
+  .array(z.object({ id: z.string().uuid(), kind: z.enum(FLOW_MENTION_KINDS) }).strict())
+  // Bounded before the duplicates are compared, so a flood costs nothing to refuse.
+  .max(20, { error: "Mention at most five things at once." })
+  .transform((mentions) => mentions.filter((mention, index) => mentions.findIndex((other) => other.id === mention.id && other.kind === mention.kind) === index))
+  .pipe(z.array(z.object({ id: z.string(), kind: z.enum(FLOW_MENTION_KINDS) })).max(5, { error: "Mention at most five things at once." }))
+
+export type FlowMention = z.infer<typeof flowMentionsSchema>[number]
+
 export const flowRequestSchema = z
   .object({
     actorUserId: z.string().trim().min(1),
@@ -91,56 +107,63 @@ export const flowRequestSchema = z
     templateId: z.string().uuid(),
     draft: flowDraftSchema,
     instruction: z.string().trim().min(2).max(2_000),
-    model: flowModelSchema.optional()
+    model: flowModelSchema.optional(),
+    // An uploaded form for Flow to recreate, sent again on each turn that continues it.
+    sourceDocumentId: z.string().uuid().optional(),
+    // What the member pointed at with @, for this turn only.
+    mentions: flowMentionsSchema.optional()
   })
   .strict()
 
 const generatedRunSchema = textRunSchema.pick({ bold: true, italic: true, text: true, underline: true }).strict()
 
+// A rule as Flow writes it; null takes a block's rule off.
+const FLOW_VISIBLE_WHEN = { visibleWhen: templateFieldVisibilitySchema.nullable().optional() }
+
 const generatedBlockSchema = z.discriminatedUnion("type", [
   // Flow may make words bold, italic or underlined; fonts, sizes and colours stay the editor's.
-  headingBlockObjectSchema.omit({ id: true }).extend({ runs: z.array(generatedRunSchema).max(200).optional() }).strict(),
-  paragraphBlockObjectSchema.omit({ id: true }).extend({ runs: z.array(generatedRunSchema).max(200).optional() }).strict(),
-  bulletListBlockObjectSchema.omit({ id: true, itemRuns: true }),
-  numberedListBlockObjectSchema.omit({ id: true, itemRuns: true }),
-  tableBlockSchema.omit({ id: true }),
+  headingBlockObjectSchema.omit({ id: true }).extend({ runs: z.array(generatedRunSchema).max(200).optional(), ...FLOW_VISIBLE_WHEN }).strict(),
+  paragraphBlockObjectSchema.omit({ id: true }).extend({ runs: z.array(generatedRunSchema).max(200).optional(), ...FLOW_VISIBLE_WHEN }).strict(),
+  bulletListBlockObjectSchema.omit({ id: true, itemRuns: true }).extend(FLOW_VISIBLE_WHEN),
+  numberedListBlockObjectSchema.omit({ id: true, itemRuns: true }).extend(FLOW_VISIBLE_WHEN),
+  tableBlockSchema.omit({ id: true }).extend(FLOW_VISIBLE_WHEN),
   dividerBlockSchema.omit({ id: true }),
   textFieldBlockObjectSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   dateFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   checkboxFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   dropdownFieldBlockSchema
     .omit({ id: true, fieldKey: true })
     // The question its "Other" answer asks; it names the field Flow adds for it.
-    .extend({ fieldKey: generatedFieldKeySchema, otherLabel: z.string().trim().min(1).max(160).optional() })
+    .extend({ fieldKey: generatedFieldKeySchema, otherLabel: z.string().trim().min(1).max(160).optional(), ...FLOW_VISIBLE_WHEN })
     .strict(),
   choiceGridFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   tableFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   initialsFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   signatureFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   fileFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict()
 ])
 
@@ -277,13 +300,28 @@ const flowWireOperationSchema = z.discriminatedUnion("type", [
           style: z.enum(Object.keys(DOCUMENT_STYLES) as [DocumentStyle, ...DocumentStyle[]]).optional(),
           pageSize: templateLayoutSchema.shape.pageSize.unwrap().optional(),
           orientation: templateLayoutSchema.shape.orientation.unwrap().optional(),
+          // Kept so proposals already made still rebuild; Flow now sets margins.
           marginPreset: templateLayoutSchema.shape.marginPreset.unwrap().optional(),
+          // A named size, or points for the sides that change.
+          margins: z
+            .union([
+              z.enum(["narrow", "normal", "wide"]),
+              z
+                .object({
+                  top: z.number().min(0).max(144).optional(),
+                  right: z.number().min(0).max(144).optional(),
+                  bottom: z.number().min(0).max(144).optional(),
+                  left: z.number().min(0).max(144).optional(),
+                })
+                .strict(),
+            ])
+            .optional(),
           lineSpacing: templateLayoutSchema.shape.lineSpacing,
           paragraphSpacing: templateLayoutSchema.shape.paragraphSpacing,
           fieldStyle: templateLayoutSchema.shape.fieldStyle,
           sectionStyle: templateLayoutSchema.shape.sectionStyle,
           // "none" takes numbering away, where absent leaves it as it is.
-          sectionNumbers: z.enum(["letters", "numbers", "none"]).optional(),
+          sectionNumbers: z.enum(["letters", "numbers", "clauses", "none"]).optional(),
           headerText: templateLayoutSchema.shape.headerText,
           footerText: templateLayoutSchema.shape.footerText,
           headerPolicy: templateLayoutSchema.shape.headerPolicy.unwrap().optional(),
@@ -329,9 +367,13 @@ const flowResponseEnvelopeShape = {
   confirmationQuestion: z.string().trim().max(500)
 }
 
+// The answers written on an attached form. Whatever arrives here never fails the turn.
+const sourceAnswersJsonShape = { sourceAnswersJson: z.string().optional().catch(undefined) }
+
 export const flowProviderResponseSchema = z
   .object({
     ...flowResponseEnvelopeShape,
+    ...sourceAnswersJsonShape,
     operations: z.array(flowWireOperationSchema).max(FLOW_MAX_OPERATIONS)
   })
   .strict()
@@ -339,6 +381,7 @@ export const flowProviderResponseSchema = z
 export const flowStructuredResponseSchema = z
   .object({
     ...flowResponseEnvelopeShape,
+    ...sourceAnswersJsonShape,
     operations: z
       .array(
         z
@@ -355,7 +398,7 @@ export const flowStructuredResponseSchema = z
 
 // A rebuild takes back only what a Flow response could have held.
 export const flowRebuildRequestSchema = flowRequestSchema
-  .omit({ instruction: true, model: true })
+  .omit({ instruction: true, model: true, sourceDocumentId: true })
   .extend({
     baseDraftFingerprint: z.string().min(1).max(200),
     operations: flowProviderResponseSchema.shape.operations
@@ -412,6 +455,8 @@ export type FlowApplicationResult = {
   draft: EditableFlowDraft
   ledgerItems: TemplateFlowLedgerItem[]
   changedBlockIds: string[]
+  /** The key the model wrote for each field it added or changed → the key the field has, or null when it wrote it on two. Never shown or logged. */
+  fieldKeys?: ReadonlyMap<string, string | null>
 }
 
 export type TemplateFlowProposalReceipt = {
@@ -443,7 +488,19 @@ export type ExecuteTemplateFlowInput = {
   draft: unknown
   instruction: unknown
   model?: unknown
+  sourceDocumentId?: unknown
+  mentions?: unknown
 }
+
+/** An uploaded document Flow is asked to read, and who asks. */
+export type FlowSourceInput = {
+  actorUserId: string
+  organizationId: string
+  documentId: string
+}
+
+/** Reads a checked source document into the file the model is given. */
+export type LoadFlowSource = (input: FlowSourceInput) => Promise<AiAttachment>
 
 export type ExecuteDocumentFlowInput = {
   actorUserId: string
@@ -452,6 +509,9 @@ export type ExecuteDocumentFlowInput = {
   draft: unknown
   instruction: unknown
   model?: unknown
+  /** An uploaded form for Flow to recreate on the page, sent again on each turn that continues it. */
+  sourceDocumentId?: unknown
+  mentions?: unknown
 }
 
 export type RebuildTemplateFlowProposalInput = Omit<ExecuteTemplateFlowInput, "instruction" | "model"> & {
@@ -487,6 +547,7 @@ export type TemplateFlowServiceDeps = {
   createId?: () => string
   createTraceId?: () => string
   getAiRuntime?: (options?: { model?: string }) => AiRuntime
+  loadSource?: LoadFlowSource
   loadHistory?: (input: {
     organizationId: string
     templateId: string
@@ -500,6 +561,10 @@ export type TemplateFlowServiceDeps = {
     actorUserId: string
   }) => Promise<void>
   resolveAuthorName?: (actorUserId: string) => Promise<string>
+  /** Hears each stage of the turn as it starts. */
+  onStage?: (stage: FlowStage) => void
+  /** Reads what the member mentioned, as them. */
+  resolveMentions?: (input: { actorUserId: string; mentions: readonly FlowMention[]; organizationId: string }) => Promise<ReadonlyArray<{ details: string; kind: FlowMention["kind"]; name: string }>>
 }
 
 /** Error raised when Flow cannot safely complete a template conversation turn. */

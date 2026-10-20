@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 const publicSupabaseSchema = z.object({
   SUPABASE_URL: z.string().url(),
@@ -50,7 +50,11 @@ const aiEnvSchema = z.object({
     z.number().int().min(1000).max(120000).default(90000)
   ),
   // Overrides the approved model's reasoning effort, for benchmark sweeps.
-  AI_EFFORT: z.enum(["minimal", "low", "medium", "high"]).optional()
+  AI_EFFORT: z.enum(["minimal", "low", "medium", "high"]).optional(),
+  // Development and e2e only: answer Flow from a fixture file, or record real
+  // answers into one (services/ai/replay-provider.ts).
+  AI_REPLAY_FILE: z.string().trim().min(1).optional(),
+  AI_RECORD_FILE: z.string().trim().min(1).optional()
 })
 
 // Each registered AI provider's credential. Read only when that provider is
@@ -350,9 +354,11 @@ export function getAiEnv(): AiEnv {
       AI_MODEL:
         process.env.AI_MODEL?.trim() ||
         // The newest approved model (services/ai/approved-models.ts).
-        (provider === "gemini" ? "gemini-3.8-flash" : undefined),
+        (provider === "gemini" || provider === "replay" ? "gemini-3.8-flash" : undefined),
       AI_TIMEOUT_MS: process.env.AI_TIMEOUT_MS,
       AI_EFFORT: process.env.AI_EFFORT?.trim() || undefined,
+      AI_REPLAY_FILE: process.env.AI_REPLAY_FILE?.trim() || undefined,
+      AI_RECORD_FILE: process.env.AI_RECORD_FILE?.trim() || undefined,
     },
     "AI"
   )

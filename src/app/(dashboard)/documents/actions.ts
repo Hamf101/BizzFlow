@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import { z } from "zod"
+import * as z from "zod"
 
 import {
   FILES_LAYOUT_COOKIE,
@@ -100,12 +100,15 @@ export async function createGeneratedDocumentAction(
         ...actor,
         folderId: folderId || null,
         templateId: templateId || null,
-        title: getFormString(formData, "title"),
+        // One-click New sends no title: the service names it after its template,
+        // or "Untitled document", and it is renamed in the editor.
+        title: getFormString(formData, "title").trim() || undefined,
         description: getFormString(formData, "description") || null,
         content: blankContent,
       })
       revalidatePath("/documents")
-      return { path: `/documents/${encodeURIComponent(document.id)}/edit` }
+      // A blank one opens with the cursor on its page (see DocumentEditor).
+      return { path: `/documents/${encodeURIComponent(document.id)}/edit${blankContent ? "?new=1" : ""}` }
     },
   })
 }

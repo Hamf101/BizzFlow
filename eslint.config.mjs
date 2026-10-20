@@ -126,6 +126,7 @@ const eslintConfig = defineConfig([
       "src/services/organizations/editor-layout-service.ts",
       "src/services/organizations/invitation-service.ts",
       "src/services/organizations/lifecycle-service.ts",
+      "src/services/organizations/hierarchy-service.ts",
       "src/services/organizations/membership-service.ts",
       "src/services/organizations/navigation-service.ts",
       "src/services/organizations/onboarding-service.ts",
@@ -157,6 +158,14 @@ const eslintConfig = defineConfig([
         },
       ],
     },
+  },
+  // A promise nobody awaits fails silently: a write that never lands, an error
+  // nobody sees. Server code only; it needs types, so it costs a cold lint more.
+  {
+    files: ["src/services/**/*.ts", "src/app/**/*.ts", "src/lib/**/*.ts", "src/inngest/**/*.ts"],
+    ignores: ["**/*.test.ts", "**/*.test-support.ts"],
+    languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
+    rules: { "@typescript-eslint/no-floating-promises": "error" },
   },
 ]);
 

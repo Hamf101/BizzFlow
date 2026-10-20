@@ -139,6 +139,10 @@ for (const role of ORGANIZATION_ROLES) {
 
     // Lists and exports answer for the actor's own organization only.
     await expectNothingOf(await api.get(`/api/search?q=${encodeURIComponent(other.prefix)}`), `${role} search`)
+    // Before any words, and from one letter: what was had lately is the actor's own.
+    for (const query of ["", "?q=" + encodeURIComponent(other.prefix.slice(0, 1)), ...["files", "templates", "submissions", "tasks", "people"].map((kind) => `?kind=${kind}`)]) {
+      await expectNothingOf(await api.get(`/api/search${query}`), `${role} search ${query || "(opening)"}`)
+    }
     await expectNothingOf(await api.get("/api/export/submissions"), `${role} submissions export`)
 
     // Pages for tenant B's ids show none of it.

@@ -92,7 +92,7 @@ export function AuthBackdrop(): ReactElement {
     }
   }, [target])
 
-  useEffect(() => lean(page.current), [])
+  useEffect(() => lean(page.current, figure.current), [])
   useEffect(() => shade(grid.current), [])
 
   // Once whole, the page now and then comes apart and folds back together.
@@ -193,38 +193,39 @@ function Piece({ children }: { children: ReactNode }): ReactElement {
 }
 
 /**
- * Leans the page toward the cursor, or the way a phone or tablet is tilted.
- * Until either arrives it drifts on its own, which is all an iPhone gets,
- * since reading its tilt needs a permission prompt. Every move is an
- * animation of the page itself, so the browser moves it without redrawing,
- * even while its time goes to another window.
+ * Leans the page toward the cursor, or the way a phone or tablet is tilted,
+ * while it drifts on its own; an iPhone gets only the drift, since reading its
+ * tilt needs a permission prompt. The drift is one endless animation of the
+ * page and the lean a transition of the figure's own translate (globals.css),
+ * so the browser moves both without redrawing, and a new pointer position only
+ * retargets the lean from wherever it has got to: nothing is read back or
+ * started again.
  *
  * @param page - The folding page.
+ * @param figure - The page's figure, inside it.
  * @returns A cleanup that stops listening.
  */
-function lean(page: HTMLElement | null): (() => void) | undefined {
-  if (!page || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+function lean(page: HTMLElement | null, figure: HTMLElement | null): (() => void) | undefined {
+  if (!page || !figure || matchMedia("(prefers-reduced-motion: reduce)").matches) {
     return undefined
   }
 
-  const at = (x: number, y: number): string =>
-    `translate3d(${(x * LEAN_REACH).toFixed(2)}px, ${(y * LEAN_REACH).toFixed(2)}px, 0)`
-  let moving = page.animate(
-    DRIFT.map(([x, y, offset]) => ({ easing: "ease-in-out", offset, transform: at(x, y) })),
+  const drifting = page.animate(
+    DRIFT.map(([x, y, offset]) => ({
+      easing: "ease-in-out",
+      offset,
+      transform: `translate3d(${(x * LEAN_REACH).toFixed(2)}px, ${(y * LEAN_REACH).toFixed(2)}px, 0)`,
+    })),
     { direction: "alternate", duration: 24_000, iterations: Infinity }
   )
   let frame = 0
+  let next: [number, number] = [0, 0]
   const toward = (x: number, y: number): void => {
-    cancelAnimationFrame(frame)
-    frame = requestAnimationFrame(() => {
-      // From wherever it has got to, its own drift included.
-      const from = getComputedStyle(page).transform
-      moving.cancel()
-      moving = page.animate([{ transform: from }, { transform: at(clamp(x), clamp(y)) }], {
-        duration: 900,
-        easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
-        fill: "forwards",
-      })
+    next = [clamp(x) * LEAN_REACH, clamp(y) * LEAN_REACH]
+    // At most once a frame, however fast the pointer reports.
+    frame ||= requestAnimationFrame(() => {
+      frame = 0
+      figure.style.translate = `${next[0].toFixed(1)}px ${next[1].toFixed(1)}px`
     })
   }
   const onPointer = (event: PointerEvent): void => {
@@ -239,12 +240,13 @@ function lean(page: HTMLElement | null): (() => void) | undefined {
     }
   }
 
-  addEventListener("pointermove", onPointer)
+  addEventListener("pointermove", onPointer, { passive: true })
   addEventListener("deviceorientation", onTilt)
 
   return () => {
     cancelAnimationFrame(frame)
-    moving.cancel()
+    drifting.cancel()
+    figure.style.translate = ""
     removeEventListener("pointermove", onPointer)
     removeEventListener("deviceorientation", onTilt)
   }
@@ -270,6 +272,10 @@ function shade(canvas: HTMLCanvasElement | null): (() => void) | undefined {
   let at = { x: 0, y: 0 }
   let to: typeof at | null = null
   let frame = 0
+  let last = 0
+  // Where the canvas sits in the document, measured on resize, so a pointer
+  // event never makes the browser lay the page out to answer.
+  let origin = { x: 0, y: 0 }
   const draw = (): void => {
     const { clientHeight: height, clientWidth: width } = canvas
     const rows = Math.ceil(height / DIAMOND) + 1
@@ -294,6 +300,8 @@ function shade(canvas: HTMLCanvasElement | null): (() => void) | undefined {
     }
   }
   const fit = (): void => {
+    const box = canvas.getBoundingClientRect()
+    origin = { x: box.left + scrollX, y: box.top + scrollY }
     const ratio = devicePixelRatio
     canvas.width = Math.round(canvas.clientWidth * ratio)
     canvas.height = Math.round(canvas.clientHeight * ratio)
@@ -301,25 +309,28 @@ function shade(canvas: HTMLCanvasElement | null): (() => void) | undefined {
     at = to ?? { x: canvas.clientWidth * 0.75, y: canvas.clientHeight * 0.3 }
     draw()
   }
-  const step = (): void => {
+  const step = (now: number): void => {
     const target = to ?? at
-    at = { x: at.x + (target.x - at.x) * SHADE_EASE, y: at.y + (target.y - at.y) * SHADE_EASE }
+    // The same pace at 60 or 120 frames a second.
+    const ease = 1 - (1 - SHADE_EASE) ** (last ? Math.min(4, (now - last) / (1000 / 60)) : 1)
+    last = now
+    at = { x: at.x + (target.x - at.x) * ease, y: at.y + (target.y - at.y) * ease }
     const settled = Math.hypot(target.x - at.x, target.y - at.y) < 0.5
     at = settled ? target : at
     draw()
     frame = settled ? 0 : requestAnimationFrame(step)
+    last = settled ? 0 : last
   }
   const onPointer = (event: PointerEvent): void => {
-    const box = canvas.getBoundingClientRect()
-    to = { x: event.clientX - box.left, y: event.clientY - box.top }
+    to = { x: event.pageX - origin.x, y: event.pageY - origin.y }
     frame ||= requestAnimationFrame(step)
   }
   const resized = new ResizeObserver(fit)
 
   resized.observe(canvas)
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    addEventListener("pointermove", onPointer)
-    addEventListener("pointerdown", onPointer)
+    addEventListener("pointermove", onPointer, { passive: true })
+    addEventListener("pointerdown", onPointer, { passive: true })
   }
 
   return () => {

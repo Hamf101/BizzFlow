@@ -2,7 +2,7 @@
 # https://supabase.com/docs/guides/local-development/cli/config
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
-project_id = "BizzFlow"
+project_id = "bizzflow"
 
 [api]
 enabled = true
@@ -108,7 +108,9 @@ openai_api_key = "env(OPENAI_API_KEY)"
 # Email testing server. Emails sent with the local dev setup are not actually sent - rather, they
 # are monitored, and you can view the emails that would have been sent from the web interface.
 [local_smtp]
-enabled = true
+# Off: the app sends every email (auth included) through EmailJS, confirmations
+# are disabled, and no test reads a caught message — one container fewer.
+enabled = false
 # Port to use for the email testing server web interface.
 port = 54324
 # Uncomment to expose additional ports for testing user applications that send emails.
@@ -118,7 +120,7 @@ port = 54324
 # sender_name = "Admin"
 
 # Disabled: file bytes live in Cloudflare R2, not Supabase Storage. No migration
-# or source file references storage.objects. MinIO stands in for R2 under test.
+# or source file references storage.objects. A local S3 gateway (docker-compose.yml) stands in for R2.
 [storage]
 enabled = false
 # The maximum file size allowed (e.g. "5MB", "500KB").

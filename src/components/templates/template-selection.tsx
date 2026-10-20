@@ -1,6 +1,6 @@
 "use client"
 
-import { Archive, Copy, RotateCcw, Tag, UserPlus } from "lucide-react"
+import { Archive, Copy, RotateCcw, Tag, Trash2, UserPlus } from "lucide-react"
 import { createContext, type ReactElement, type ReactNode, useContext, useState, useTransition } from "react"
 
 import { changeTemplatesAction, type TemplateChange } from "@/app/(dashboard)/templates/actions"
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { announceChange, bizflowToast } from "@/components/ui/toaster"
 import type { TemplateBulkResult } from "@/services/template-service"
 import type { DocumentTemplateStatus } from "@/types/template"
+import { TEMPLATE_ANSWERED_MESSAGE } from "@/types/template-trash"
 
 /** One template the library shows, with the state and rights that decide what may change. */
 export type SelectableTemplate = {
@@ -23,10 +24,12 @@ export type SelectableTemplate = {
   canEdit: boolean
   id: string
   status: DocumentTemplateStatus
+  /** It is in Trash. */
+  trashed: boolean
 }
 
 /** A change the selection offers, named as its button and menu item are. */
-export type TemplateChangeLabel = "Archive" | "Category" | "Duplicate" | "Restore"
+export type TemplateChangeLabel = "Archive" | "Category" | "Duplicate" | "Move to Trash" | "Restore"
 
 type Change = TemplateChange["change"]
 type Targets = readonly SelectableTemplate[]
@@ -37,6 +40,7 @@ const CHANGES: Record<TemplateChangeLabel, Change> = {
   Archive: "archive",
   Category: "category",
   Duplicate: "duplicate",
+  "Move to Trash": "trash",
   Restore: "restore",
 }
 const DONE: Record<Change, string> = {
@@ -44,10 +48,11 @@ const DONE: Record<Change, string> = {
   category: "filed",
   duplicate: "duplicated",
   restore: "restored",
+  trash: "moved to Trash",
 }
 
 /** Each change's icon, shared by the bar and the menus. */
-export const CHANGE_ICONS = { Archive, Category: Tag, Duplicate: Copy, Restore: RotateCcw } as const
+export const CHANGE_ICONS = { Archive, Category: Tag, Duplicate: Copy, "Move to Trash": Trash2, Restore: RotateCcw } as const
 
 /**
  * Keeps the library's selection (see SelectionProvider) for the templates a
@@ -91,20 +96,35 @@ export function SelectableTemplateCard(props: Omit<Parameters<typeof SelectableI
   return <SelectableItem {...props} checkSlot="template-check" slot="template-card" />
 }
 
-// Undo puts things back: a restore sends them back to Archived, an archive
-// restores them, and a category change files each under the one it had.
-function announce(change: Change, result: TemplateBulkResult): void {
+// Undo puts things back: a restore sends them back to Archived or Trash,
+// an archive or a move to Trash restores them, and a category change files
+// each under the one it had.
+function announce(change: Change, result: TemplateBulkResult, fromTrash: boolean): void {
   const count = result.changed.length
   const noun = count === 1 ? "template" : "templates"
   const title =
     result.failed > 0 ? `${count} of ${count + result.failed} templates ${DONE[change]}` : `${count} ${noun} ${DONE[change]}`
 
-  announceChange(title, result.failed, count > 0 ? undoOf(change, result) : null)
+  if (count > 0 || result.answered === 0) {
+    announceChange(title, result.failed, count > 0 ? undoOf(change, result, fromTrash) : null)
+  }
+
+  // Answers are a reason worth giving: those can be archived instead.
+  if (result.answered > 0) {
+    bizflowToast.info(
+      result.answered === 1 ? "One template has answers" : `${result.answered} templates have answers`,
+      { description: TEMPLATE_ANSWERED_MESSAGE }
+    )
+  }
 }
 
-function undoOf(change: Change, result: TemplateBulkResult): (() => Promise<unknown>) | null {
-  if (change === "archive" || change === "restore") {
-    return () => changeTemplatesAction({ change: change === "archive" ? "restore" : "archive", templateIds: result.changed })
+function undoOf(change: Change, result: TemplateBulkResult, fromTrash: boolean): (() => Promise<unknown>) | null {
+  if (change === "archive" || change === "trash") {
+    return () => changeTemplatesAction({ change: "restore", templateIds: result.changed })
+  }
+
+  if (change === "restore") {
+    return () => changeTemplatesAction({ change: fromTrash ? "trash" : "archive", templateIds: result.changed })
   }
 
   if (change === "category") {
@@ -144,11 +164,12 @@ export function useTemplateChanges(targets: Targets | null): {
     }
 
     const change = CHANGES[label]
+    const fromTrash = targets.every((template) => template.trashed)
 
     selection?.clear()
     startTransition(async () => {
       try {
-        announce(change, await changeTemplatesAction({ category, change, templateIds: targets.map((template) => template.id) }))
+        announce(change, await changeTemplatesAction({ category, change, templateIds: targets.map((template) => template.id) }), fromTrash)
       } catch {
         bizflowToast.error("Those templates could not be changed. Try again.")
       }
@@ -156,19 +177,22 @@ export function useTemplateChanges(targets: Targets | null): {
   }
 
   const archived = targets?.filter((template) => template.status === "archived").length ?? 0
+  const trashed = targets?.filter((template) => template.trashed).length ?? 0
   // Each change is offered only when every template allows it to this viewer.
   const every = (allowed: (template: SelectableTemplate) => boolean): boolean => Boolean(targets?.every(allowed))
   const editable = every((template) => template.canEdit)
   const labels: TemplateChangeLabel[] =
-    !targets || targets.length === 0
+    !targets || targets.length === 0 || (trashed > 0 && trashed < targets.length)
       ? []
       : archived === targets.length
         ? editable
-          ? ["Restore"]
+          ? trashed > 0
+            ? ["Restore"]
+            : ["Restore", "Move to Trash"]
           : []
         : archived === 0
           ? [
-              ...(editable ? (["Archive"] as const) : []),
+              ...(editable ? (["Archive", "Move to Trash"] as const) : []),
               ...(every((template) => template.canDuplicate) ? (["Duplicate"] as const) : []),
               ...(editable ? (["Category"] as const) : []),
             ]
@@ -199,6 +223,8 @@ export function shareableTemplates(targets: Targets): { id: string; kind: "templ
  */
 export function describeTemplateChange(label: TemplateChangeLabel, count: number): string {
   const templates = `${count} ${count === 1 ? "template" : "templates"}`
+
+  if (label === "Move to Trash") return `Move ${templates} to Trash`
 
   return label === "Category" ? `Set the category of ${templates}` : `${label} ${templates}`
 }

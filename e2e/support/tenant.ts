@@ -34,6 +34,25 @@ export type SeededTenant = {
   users: Record<OrganizationRole, SeededUser>
 }
 
+/** How a seeded tenant reads on screen: its name, domain, and each member's name. */
+export type TenantPresentation = {
+  organizationName: string
+  emailDomain: string
+  memberNames: Record<OrganizationRole, string>
+}
+
+/** The business the sales demos (e2e/demos) are recorded in. */
+export const DEMO_TENANT: TenantPresentation = {
+  organizationName: "Northside Plumbing",
+  emailDomain: "northside-plumbing.test",
+  memberNames: {
+    owner_admin: "Maya Patel",
+    manager: "Daniel Brooks",
+    staff: "Sam Okafor",
+    external_reviewer: "Priya Shah",
+  },
+}
+
 // Long enough for the signup schema's 8-character minimum with room to spare.
 const SEED_PASSWORD = "e2e-BizFlow-Passw0rd"
 
@@ -64,23 +83,30 @@ export function createAdminClient(): SupabaseClient {
  *
  * @param client - Service-role client.
  * @param label - Short suffix that keeps concurrent runs from colliding.
+ * @param presentation - Real-looking names for a demo, in place of `E2E <label>`.
  * @returns Handles for the organization and each seeded member.
  */
 export async function seedTenant(
   client: SupabaseClient,
-  label: string = randomUUID().slice(0, 8)
+  label: string = randomUUID().slice(0, 8),
+  presentation?: TenantPresentation
 ): Promise<SeededTenant> {
-  const organizationName = `E2E ${label}`
+  const organizationName = presentation?.organizationName ?? `E2E ${label}`
   const organizationId = await insertOrganization(
     client,
     organizationName,
-    `e2e-${label.toLowerCase()}`
+    `${presentation ? "demo" : "e2e"}-${label.toLowerCase()}`
   )
 
   const users = {} as Record<OrganizationRole, SeededUser>
 
   for (const role of ORGANIZATION_ROLES) {
-    users[role] = await insertMember(client, organizationId, role, label)
+    const fullName = presentation?.memberNames[role]
+    const person = presentation && fullName
+      ? { email: `${fullName.toLowerCase().replace(/\W+/g, ".")}.${label}@${presentation.emailDomain}`, fullName }
+      : undefined
+
+    users[role] = await insertMember(client, organizationId, role, label, person)
   }
 
   // The owner column is nullable and set separately so the organization row can
@@ -150,15 +176,17 @@ async function insertOrganization(
  * @param organizationId - Organization to join.
  * @param role - Role to grant.
  * @param label - Run suffix, kept in the address so leaked rows are traceable.
+ * @param person - A demo member's name and address, in place of the role's.
  * @returns The seeded user's credentials and id.
  */
 export async function insertMember(
   client: SupabaseClient,
   organizationId: string,
   role: OrganizationRole,
-  label: string
+  label: string,
+  person?: { email: string; fullName: string }
 ): Promise<SeededUser> {
-  const email = `${role.replace("_", "-")}-${label}@e2e.bizflow.test`.toLowerCase()
+  const email = (person?.email ?? `${role.replace("_", "-")}-${label}@e2e.bizflow.test`).toLowerCase()
 
   const { data, error } = await client.auth.admin.createUser({
     email,
@@ -178,7 +206,7 @@ export async function insertMember(
   // application does it in ensureProfile — so the fixture has to.
   const { error: profileError } = await client
     .from("profiles")
-    .upsert({ email, full_name: `E2E ${role}`, id: userId })
+    .upsert({ email, full_name: person?.fullName ?? `E2E ${role}`, id: userId })
 
   if (profileError) {
     throw new Error(`Could not seed ${role} profile: ${profileError.message}`)

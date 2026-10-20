@@ -61,11 +61,11 @@ export default function SelectMenu({
       </BaseSelect.Trigger>
       <BaseSelect.Portal>
         <BaseSelect.Positioner alignItemWithTrigger={false} className="z-[60] outline-none" sideOffset={4}>
-          <BaseSelect.Popup className="max-h-[min(24rem,var(--available-height))] min-w-[var(--anchor-width)] origin-[var(--transform-origin)] overflow-y-auto rounded-[12px] border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none transition-[scale,opacity] duration-100 data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
+          <BaseSelect.Popup className="max-h-[min(24rem,var(--available-height))] min-w-[var(--anchor-width)] origin-[var(--transform-origin)] overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none transition-[scale,opacity] duration-100 data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
             <BaseSelect.List>
               {choices.map((choice: Choice) => (
                 <BaseSelect.Item
-                  className="grid cursor-default grid-cols-[1rem_minmax(0,1fr)] items-center gap-2 rounded-[8px] py-2 pr-3 pl-2 text-sm outline-none select-none data-disabled:text-muted-foreground data-highlighted:bg-muted md:py-1.5"
+                  className="grid cursor-default grid-cols-[1rem_minmax(0,1fr)] items-center gap-2 rounded-md py-2 pr-3 pl-2 text-sm outline-none select-none data-disabled:text-muted-foreground data-highlighted:bg-muted md:py-1.5"
                   disabled={choice.disabled}
                   key={choice.value}
                   value={choice.value}

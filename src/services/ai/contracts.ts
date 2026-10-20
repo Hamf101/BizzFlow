@@ -25,10 +25,19 @@ export type AiTokenUsage = {
   totalTokens: number | null
 }
 
+/** A file the model reads beside the prompt, such as a form to recreate. */
+export type AiAttachment = {
+  kind: "document" | "image"
+  mimeType: "application/pdf" | "image/png" | "image/jpeg"
+  data: Uint8Array
+}
+
 /** Provider-neutral request for schema-constrained text generation. */
 export type AiStructuredGenerationRequest = {
   model: AiModelReference
   input: string
+  /** Read before `input`. An adapter that cannot read files refuses the request. */
+  attachments?: AiAttachment[]
   systemInstruction: string
   responseSchema: AiJsonSchema
   maxOutputTokens: number

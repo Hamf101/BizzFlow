@@ -125,7 +125,7 @@ export function MobileTabBar({
                   return (
                     <IntentPrefetchLink
                       className={cn(
-                        "flex h-11 items-center gap-3 rounded-[10px] px-3 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
+                        "flex h-11 items-center gap-3 rounded-lg px-3 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
                         current
                           ? "bg-secondary font-medium text-secondary-foreground"
                           : "text-foreground hover:bg-secondary/60"

@@ -128,6 +128,23 @@ it("opens from the keyboard, lists what it finds in the order of the member's ta
   expect(push).toHaveBeenCalledWith("/templates/template-1/edit")
 })
 
+it("shows what the member had lately the moment it opens, and searches from the first letter", async () => {
+  await open()
+  await act(() => vi.advanceTimersByTimeAsync(200))
+
+  // Nothing typed yet: the recent things, not an empty panel.
+  expect(fetchMock).toHaveBeenCalledWith("/api/search?", expect.anything())
+  expect(options()).toEqual([expect.stringContaining("Lease — 14 Harbour St"), expect.stringContaining("Lease agreement")])
+
+  await type("l")
+  expect(fetchMock).toHaveBeenLastCalledWith("/api/search?q=l", expect.anything())
+  // One letter looks only through recent files, so it claims no totals it didn't count.
+  expect(document.querySelector('[role="dialog"]')?.textContent).not.toMatch(/Show all \d/)
+  expect([...document.querySelectorAll("button[aria-pressed]")].map((pill) => pill.textContent)).toEqual(
+    [...document.querySelectorAll("button[aria-pressed]")].map((pill) => pill.textContent?.replace(/\d+$/, ""))
+  )
+})
+
 it("narrows to one section, whose whole list opens with the same words in the view it was in", async () => {
   await open()
   await type("lease")
@@ -149,8 +166,6 @@ it("narrows to one section, whose whole list opens with the same words in the vi
 
 it("opens a section's own list when it is chosen before any words", async () => {
   await open()
-  // Bare until something is asked, as Spotlight is.
-  expect(document.querySelector('[role="listbox"]')).toBeNull()
 
   const tasks = [...document.querySelectorAll("button[aria-pressed]")].find((pill) => pill.textContent === "Tasks")!
   await act(async () => (tasks as HTMLButtonElement).click())

@@ -13,6 +13,7 @@ import {
   shareInternalSubmission,
   SubmissionServiceError,
   submitInternalSubmission,
+  listSubmissionPage,
   transitionInternalSubmission,
 } from "@/services/submission-service"
 
@@ -67,6 +68,7 @@ vi.mock("@/services/submission-service", async (importOriginal) => {
     createInternalSubmissionDraft: vi.fn(),
     decideSubmissionSuggestion: vi.fn(),
     dismissSubmissionChangesRequest: vi.fn(),
+    listSubmissionPage: vi.fn(async () => ({ submissions: [] })),
     saveInternalSubmissionDraft: vi.fn(),
     setInternalSubmissionReviewers: vi.fn(),
     shareInternalSubmission: vi.fn(),
@@ -152,6 +154,22 @@ describe("submission review actions", () => {
 
     await expect(dismissChangesRequestAction(formData)).rejects.toThrow("NEXT_REDIRECT")
     expect(dismissSubmissionChangesRequest).not.toHaveBeenCalled()
+  })
+
+  it("after a decision opens the next submission waiting for review, oldest first", async () => {
+    mockOrganizationContext("manager")
+    const next = "30000000-0000-4000-8000-000000000002"
+    vi.mocked(listSubmissionPage).mockResolvedValueOnce({ submissions: [{ id: SUBMISSION_ID }, { id: next }] } as never)
+    vi.mocked(transitionInternalSubmission).mockResolvedValueOnce({ id: SUBMISSION_ID, status: "approved" } as never)
+    const formData = createSubmissionFormData()
+    formData.set("targetStatus", "approved")
+
+    await expect(transitionSubmissionAction(formData)).rejects.toThrow(`NEXT_REDIRECT:/submissions/${next}?feedback=submission_reviewed_next`)
+
+    // An approval of several leaves it waiting on the others: they stay to see it.
+    vi.mocked(transitionInternalSubmission).mockResolvedValueOnce({ id: SUBMISSION_ID, status: "in_review" } as never)
+    await expect(transitionSubmissionAction(formData)).rejects.toThrow(`NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=submission_review_updated`)
+    expect(listSubmissionPage).toHaveBeenCalledWith(expect.objectContaining({ sort: { direction: "asc", key: "updated" }, statuses: ["submitted", "in_review"] }))
   })
 
   it("lets an external reviewer reach the decision, and shows what the service says when they may not reject", async () => {

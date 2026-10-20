@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import type { ReactElement } from "react"
@@ -10,8 +11,10 @@ import {
   selectDueThisWeek,
 } from "@/components/dashboard/dashboard-view"
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist"
+import { OneClickForm } from "@/components/ui/one-click-form"
 import { DatedTitle } from "@/components/navigation/dated-title"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { buttonVariants } from "@/components/ui/button"
 import { readTimeZone, TIME_ZONE_COOKIE } from "@/lib/date-format"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
@@ -31,6 +34,7 @@ import { countSubmissionsByStatus, listSubmissionPage } from "@/services/submiss
 import { listTaskPage } from "@/services/task-service"
 import {
   SAMPLE_SUBMISSION_COUNT,
+  BUSINESS_KINDS,
   STARTER_TEMPLATES,
 } from "@/services/templates/starter-templates"
 import type { GeneratedDocumentWorkflowStatus } from "@/types/template"
@@ -41,12 +45,23 @@ import {
 } from "./actions"
 import type { Metadata } from "next"
 
+import { createGeneratedDocumentAction } from "../documents/actions"
+
 // ponytail: the queue ranks the first page of each source (20 submissions per
 // kind, 50 open tasks, the 20 documents you generated most recently); page
 // through them when an organization outgrows that.
 const PAGE = 20
 
 export const metadata: Metadata = { title: "Dashboard" }
+
+
+// What each kind of work's starter pack holds, for the getting started preview.
+const STARTERS_BY_KIND = Object.fromEntries(
+  BUSINESS_KINDS.map((kind) => [
+    kind.id,
+    STARTER_TEMPLATES.filter((starter) => starter.kinds.includes(kind.id)).map(({ category, title }) => ({ category, title })),
+  ])
+)
 
 export default async function DashboardPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/dashboard")
@@ -125,6 +140,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
                 page: 1,
                 pageSize: 50,
                 sort: { direction: "asc", key: "due" },
+                withTotal: false,
                 statuses: ["open", "in_progress"],
               })
             ).tasks,
@@ -142,6 +158,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
                 pageSize: PAGE,
                 sort: { direction: "asc", key: "updated" },
                 statuses: ["submitted", "in_review"],
+                withTotal: false,
               })
             ).submissions,
           []
@@ -159,6 +176,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
                 createdBy: user.id,
                 sort: { direction: "desc", key: "updated" },
                 statuses: ["needs_changes", "draft"],
+                withTotal: false,
               })
             ).submissions,
           []
@@ -196,7 +214,8 @@ export default async function DashboardPage(): Promise<ReactElement> {
           "dashboard_files_load_failed",
           async () => {
             const [recent, generated] = await Promise.all([
-              listRecentDocuments({ ...actor, limit: 3 }),
+              // Recent files are the ones this member opened.
+              listRecentDocuments({ ...actor, limit: 3, openedBy: user.id }),
               listRecentDocuments({ ...actor, generatedBy: user.id, limit: PAGE }),
             ])
             const documentIds = [
@@ -250,7 +269,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
   const onboardingSteps = [
     {
       id: "org",
-      title: "Create a workspace",
+      title: "Create your workspace",
       completed: true,
       href: "/dashboard",
       actionText: "Create",
@@ -260,18 +279,18 @@ export default async function DashboardPage(): Promise<ReactElement> {
       title: "Invite your team",
       completed: progress.value.hasInvitedMembers,
       href: "/people",
-      actionText: "Invite",
+      actionText: "Invite people",
     },
     {
       id: "template",
-      title: "Publish a template",
+      title: "Pick your forms",
       completed: progress.value.hasPublishedTemplate,
-      href: "/templates/new",
-      actionText: "New template",
+      href: "/templates",
+      actionText: "Open templates",
     },
     {
       id: "submission",
-      title: "Collect a submission",
+      title: "Get your first answers",
       completed: progress.value.hasSubmission,
       href: "/submissions",
       actionText: "Open submissions",
@@ -280,13 +299,18 @@ export default async function DashboardPage(): Promise<ReactElement> {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="grid items-baseline gap-x-6 gap-y-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-        <p className="text-2xl leading-none font-medium tracking-[-0.02em] lg:col-start-2 lg:row-start-1">
-          {firstName ? `Welcome back, ${firstName}!` : "Welcome back!"}
-        </p>
-        <DatedTitle className="lg:col-start-1 lg:row-start-1">
-          <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">Dashboard</h1>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <DatedTitle>
+          <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
+            {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
+          </h1>
         </DatedTitle>
+        {can("documents:create") ? (
+          <OneClickForm action={createGeneratedDocumentAction} className={buttonVariants()}>
+            <Plus aria-hidden="true" />
+            New document
+          </OneClickForm>
+        ) : null}
       </header>
 
       {/* Setting up is for those who can; a new staff member starts at their own work. */}
@@ -295,7 +319,8 @@ export default async function DashboardPage(): Promise<ReactElement> {
           sampleAction={seedSampleSubmissionsAction}
           sampleActionLabel={`Add ${SAMPLE_SUBMISSION_COUNT} sample submissions`}
           seedAction={seedStarterTemplatesAction}
-          seedActionLabel={`Add ${STARTER_TEMPLATES.length} starter templates`}
+          businessKinds={BUSINESS_KINDS}
+          starters={STARTERS_BY_KIND}
           steps={onboardingSteps}
         />
       ) : null}

@@ -194,7 +194,7 @@ export default function DatePickerCalendar({
                           aria-current={shown === today ? "date" : undefined}
                           aria-label={`${WEEKDAYS[weekdayOf(shown)]}, ${formatDateAnswer(shown, SPOKEN_DATE)}`}
                           className={cn(
-                            "grid size-10 place-items-center rounded-[10px] text-sm tabular-nums max-md:size-11 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40",
+                            "grid size-10 place-items-center rounded-lg text-sm tabular-nums max-md:size-11 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40",
                             shownMonth !== month && "text-muted-foreground/60",
                             shown === today && "font-semibold text-primary",
                             shown === chosen && "bg-primary text-primary-foreground hover:bg-primary"

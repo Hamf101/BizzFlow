@@ -68,12 +68,19 @@ export type TemplateFlowProposal = {
   wireOperations: TemplateFlowWireOperation[]
   changedBlockIds: string[]
   qualityIssues: TemplateFlowQualityIssue[]
+  /**
+   * The answers written on the form it was recreated from, keyed by the
+   * candidate's field keys, to fill a copy with. Never signatures or files.
+   */
+  sourceAnswers?: Record<string, unknown>
 }
 
 export type TemplateFlowMessage = {
   id: string
   role: "user" | "assistant"
   content: string
+  /** Who wrote a member's message, so two people of one name stay apart; null for Flow. */
+  authorUserId: string | null
   authorName: string | null
   operations: TemplateFlowLedgerItem[]
   changedBlockIds: string[]
@@ -100,3 +107,11 @@ export type TemplateFlowMessageRow = Record<string, unknown> & {
   change_set: Record<string, unknown> | null
   created_at: string
 }
+
+/** What filling with a form's answers did: a filled copy to open, or the answers the page now holds; or why not. */
+export type FlowFillResult =
+  | Readonly<{ answers?: Record<string, unknown>; dropped: number; href?: string; kept: number; ok: true }>
+  | Readonly<{ message: string; ok: false }>
+
+/** The kinds of file Flow recreates a form from; the server checks each again by its bytes. */
+export const FLOW_FILE_TYPES: readonly string[] = ["application/pdf", "image/png", "image/jpeg"]

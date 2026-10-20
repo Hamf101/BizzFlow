@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 /** Lists whose view menu can keep a member's views, named by their route. */
 const SAVED_VIEW_LISTS = [

@@ -1,21 +1,75 @@
 import { boxSigner } from "@/types/box-signers"
 import type {
-  CheckboxFieldBlock,
-  DropdownFieldBlock,
   TemplateBlock,
-  TemplateContent
+  TemplateContent,
+  TemplateVisibility,
+  TemplateVisibilityCondition
 } from "@/types/template"
 
-type VisibilitySourceBlock = CheckboxFieldBlock | DropdownFieldBlock
+/** The tests in a rule, whichever way it is written. */
+export function visibilityConditions(rule: TemplateVisibility | undefined): TemplateVisibilityCondition[] {
+  return rule === undefined ? [] : "conditions" in rule ? rule.conditions : [rule]
+}
+
+const TEST_WORDS: Record<TemplateVisibilityCondition["operator"], string> = {
+  answered: "is answered",
+  equals: "is",
+  greater_than: "is more than",
+  less_than: "is less than",
+  not_answered: "is not answered",
+  not_equals: "is not",
+}
+
+/**
+ * A block's rule in words, as a blank form prints it above what it shows:
+ * "Pets is ticked", "Income is more than 50000 and Status is not Retired".
+ *
+ * @param content - Canonical content holding the rule's sources.
+ * @param block - A block from the same content.
+ * @returns The rule's tests joined by "and" or "or", or null without a rule.
+ */
+export function describeVisibilityRule(content: TemplateContent, block: TemplateBlock): string | null {
+  const rule = "visibleWhen" in block ? block.visibleWhen : undefined
+
+  if (rule === undefined) {
+    return null
+  }
+
+  const tests = visibilityConditions(rule).map(({ operator, sourceBlockId, value }): string => {
+    const source = content.blocks.find((candidate: TemplateBlock): boolean => candidate.id === sourceBlockId)
+    // A long question is cut, so the cue stays one line on most pages.
+    const label = source && "label" in source ? clip(source.label.trim(), 60) : "an earlier answer"
+
+    if (typeof value === "boolean") {
+      return `${label} is ${value === (operator === "equals") ? "" : "not "}ticked`
+    }
+
+    const words = source?.type === "dropdown_field" && source.multiple && operator === "equals" ? "includes" : TEST_WORDS[operator]
+
+    // An amount reads as written on the form: "£50,270".
+    const amount =
+      source?.type === "text_field" && (source.format === "number" || source.format === "money") && /^-?\d+(?:\.\d+)?$/.test(value ?? "")
+        ? `${source.prefix ?? ""}${(value ?? "").replace(/^(-?\d+)/, (whole) => whole.replace(/\B(?=(\d{3})+$)/g, ","))}`
+        : value
+
+    return amount === undefined ? `${label} ${words}` : `${label} ${words} ${clip(amount, 60)}`
+  })
+
+  return tests.join("conditions" in rule && rule.match === "any" ? " or " : " and ")
+}
+
+function clip(words: string, length: number): string {
+  return words.length > length ? `${words.slice(0, length - 1).trimEnd()}…` : words
+}
 
 /**
  * Determines whether one canonical template block is visible for the supplied
  * answer state.
  *
- * Version-two snapshots remain fully visible. Version-three conditional fields
- * are visible only when their earlier checkbox or dropdown controller is itself
- * visible and its effective value equals the declared condition. An unanswered
- * checkbox uses `checkedByDefault`; an unanswered dropdown uses an empty string.
+ * Version-two snapshots remain fully visible. A version-three block with a
+ * rule shows when all, or any, of its tests hold. A test holds only while its
+ * earlier source is itself visible. An unanswered checkbox uses
+ * `checkedByDefault`; any other unanswered source reads as blank.
  *
  * @param content - Parsed immutable template content.
  * @param block - Block from the same canonical template.
@@ -27,7 +81,58 @@ export function isTemplateBlockVisible(
   block: TemplateBlock,
   values: Readonly<Record<string, unknown>>
 ): boolean {
-  return isTemplateBlockVisibleInternal(content, block, values, new Set())
+  return visibilityPass(content, values)(block)
+}
+
+/**
+ * Visibility for one answer state, each block worked out once and reused by
+ * every rule that tests it, so chained rules stay linear. Answers are read as
+ * each block is asked about: a rule reads only earlier blocks, so a caller
+ * may fill answers in top to bottom as it goes.
+ *
+ * @param content - Parsed immutable template content.
+ * @param values - Answers keyed by stable field key.
+ * @returns Whether a block of the same content shows.
+ */
+export function visibilityPass(
+  content: TemplateContent,
+  values: Readonly<Record<string, unknown>>
+): (block: TemplateBlock) => boolean {
+  const known = new Map<string, boolean>()
+  const blockById = new Map<string, TemplateBlock>()
+
+  for (const block of content.blocks) {
+    if (!blockById.has(block.id)) blockById.set(block.id, block)
+  }
+
+  const shows = (block: TemplateBlock): boolean => {
+    if (content.schemaVersion !== 3 || !("visibleWhen" in block) || block.visibleWhen === undefined) {
+      return true
+    }
+
+    const found = known.get(block.id)
+
+    if (found !== undefined) {
+      return found
+    }
+
+    // A rule that leads back to its own block never holds.
+    known.set(block.id, false)
+
+    const holds = (condition: TemplateVisibilityCondition): boolean => {
+      const source = blockById.get(condition.sourceBlockId)
+
+      return source !== undefined && "fieldKey" in source && shows(source) && testCondition(condition, readEffectiveSourceValue(source, values))
+    }
+    const rule = block.visibleWhen
+    const result = "conditions" in rule && rule.match === "any" ? rule.conditions.some(holds) : visibilityConditions(rule).every(holds)
+
+    known.set(block.id, result)
+
+    return result
+  }
+
+  return shows
 }
 
 /**
@@ -41,9 +146,7 @@ export function getVisibleTemplateBlocks(
   content: TemplateContent,
   values: Readonly<Record<string, unknown>>
 ): TemplateBlock[] {
-  return content.blocks.filter((block: TemplateBlock): boolean =>
-    isTemplateBlockVisible(content, block, values)
-  )
+  return content.blocks.filter(visibilityPass(content, values))
 }
 
 /**
@@ -86,24 +189,29 @@ export function pruneHiddenTemplateFieldValues(
  * @param currentValues - Current browser answer state.
  * @param fieldKey - Stable key of the changed field.
  * @param value - New normalized browser value.
+ * @param settle - Brings answers to what the page shows: the hidden ones let
+ *   go, and for a document with formulas, what each works out, so a rule
+ *   testing a worked-out answer reads the new figure.
  * @returns Effective visible answer state after the change.
  */
 export function applyVisibleTemplateFieldValue(
   content: TemplateContent,
   currentValues: Readonly<Record<string, unknown>>,
   fieldKey: string,
-  value: unknown
+  value: unknown,
+  settle: AnswerSettler = pruneHiddenTemplateFieldValues
 ): Record<string, unknown> {
-  const visibleCurrentValues = pruneHiddenTemplateFieldValues(
-    content,
-    currentValues
-  )
-
-  return pruneHiddenTemplateFieldValues(content, {
-    ...visibleCurrentValues,
+  return settle(content, {
+    ...settle(content, currentValues),
     [fieldKey]: value
   })
 }
+
+/** Brings an answer state to what its page shows. */
+export type AnswerSettler = (
+  content: TemplateContent,
+  values: Readonly<Record<string, unknown>>
+) => Record<string, unknown>
 
 /**
  * Determines whether the visible template state requires one signer's initials
@@ -134,80 +242,54 @@ export function templateRequiresVisibleInitials(
   )
 }
 
-function isTemplateBlockVisibleInternal(
-  content: TemplateContent,
-  block: TemplateBlock,
-  values: Readonly<Record<string, unknown>>,
-  visitedBlockIds: ReadonlySet<string>
-): boolean {
-  if (
-    content.schemaVersion !== 3 ||
-    !("fieldKey" in block) ||
-    block.visibleWhen === undefined
-  ) {
-    return true
+function testCondition(condition: TemplateVisibilityCondition, answer: boolean | string | unknown[]): boolean {
+  const { operator, value } = condition
+  const answered = Array.isArray(answer) ? answer.length > 0 : typeof answer === "string" ? answer.trim() !== "" : answer
+
+  switch (operator) {
+    case "answered":
+      return answered
+    case "not_answered":
+      return !answered
+    case "greater_than":
+    case "less_than": {
+      const number = readNumber(answer)
+      const limit = Number(value)
+
+      return number !== null && (operator === "greater_than" ? number > limit : number < limit)
+    }
+    default: {
+      // "Equals" on several choices means the value is among those ticked;
+      // typed words match whatever their case and spacing.
+      const equal = Array.isArray(answer)
+        ? answer.includes(value)
+        : typeof answer === "string" && typeof value === "string"
+          ? answer.trim().toLowerCase() === value.trim().toLowerCase()
+          : Object.is(answer, value)
+
+      return operator === "equals" ? equal : !equal
+    }
   }
-
-  if (visitedBlockIds.has(block.id)) {
-    return false
-  }
-
-  const sourceBlock = content.blocks.find(
-    (candidate: TemplateBlock): boolean =>
-      candidate.id === block.visibleWhen?.sourceBlockId
-  )
-
-  if (!isVisibilitySourceBlock(sourceBlock)) {
-    return false
-  }
-
-  const nextVisitedBlockIds = new Set(visitedBlockIds)
-  nextVisitedBlockIds.add(block.id)
-
-  if (
-    !isTemplateBlockVisibleInternal(
-      content,
-      sourceBlock,
-      values,
-      nextVisitedBlockIds
-    )
-  ) {
-    return false
-  }
-
-  const effectiveSourceValue = readEffectiveSourceValue(sourceBlock, values)
-
-  // "Equals" on several choices means the value is among those ticked.
-  return Array.isArray(effectiveSourceValue)
-    ? effectiveSourceValue.includes(block.visibleWhen.value)
-    : Object.is(effectiveSourceValue, block.visibleWhen.value)
 }
 
-function isVisibilitySourceBlock(
-  block: TemplateBlock | undefined
-): block is VisibilitySourceBlock {
-  return (
-    block?.type === "checkbox_field" || block?.type === "dropdown_field"
-  )
+// A typed number or amount, its thousands commas allowed; anything else is not one.
+function readNumber(answer: unknown): number | null {
+  const text = typeof answer === "string" ? answer.replace(/,/g, "").trim() : ""
+
+  return /^-?\d+(?:\.\d+)?$/.test(text) ? Number(text) : null
 }
 
 function readEffectiveSourceValue(
-  sourceBlock: VisibilitySourceBlock,
+  sourceBlock: Extract<TemplateBlock, { fieldKey: string }>,
   values: Readonly<Record<string, unknown>>
 ): boolean | string | unknown[] {
-  if (!Object.prototype.hasOwnProperty.call(values, sourceBlock.fieldKey)) {
-    return sourceBlock.type === "checkbox_field"
-      ? sourceBlock.checkedByDefault
-      : ""
-  }
-
-  const value = values[sourceBlock.fieldKey]
+  const value = Object.prototype.hasOwnProperty.call(values, sourceBlock.fieldKey) ? values[sourceBlock.fieldKey] : undefined
 
   if (sourceBlock.type === "checkbox_field") {
-    return typeof value === "boolean" ? value : false
+    return value === undefined ? sourceBlock.checkedByDefault : value === true
   }
 
-  if (sourceBlock.multiple) {
+  if (sourceBlock.type === "dropdown_field" && sourceBlock.multiple) {
     return Array.isArray(value) ? value : []
   }
 

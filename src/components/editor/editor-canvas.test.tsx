@@ -9,6 +9,7 @@ import { DesignToolsContext } from "./design-tools"
 import { DESIGN_TOOLS } from "./design-tools-provided"
 import { INSERT_CHOICES } from "./block-catalog"
 import { EditorCanvas } from "./editor-canvas"
+import { setMarginText } from "./margin-text-band"
 import { useReadOnlyController } from "./read-only-controller"
 import { useEditorController, type EditorController } from "./use-editor-controller"
 import { useEditorHistory } from "./use-editor-history"
@@ -36,13 +37,41 @@ const TERMS: TemplateContentV3 = {
   sections: [{ id: S, label: "Terms", startBlockId: B, keepTogether: false, pageBreakBefore: false }],
 }
 
-function Canvas({ editable = true, fields = "design", initial = TERMS, narrow = true }: { editable?: boolean; fields?: "design" | "fill"; initial?: TemplateContentV3; narrow?: boolean }) {
+function Canvas({ editable = true, fields = "design", initial = TERMS, narrow = true, startTyping = false }: { editable?: boolean; fields?: "design" | "fill"; initial?: TemplateContentV3; narrow?: boolean; startTyping?: boolean }) {
   const history = useEditorHistory<TemplateContentV3>(initial)
   const current = useEditorController({ change: history.set, content: history.state, undo: history.undo })
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   useEffect(() => { controller = current })
-  return <DesignToolsContext.Provider value={DESIGN_TOOLS}><EditorCanvas allowFiles answers={answers} controller={current} designable={editable} documentTitle="Agreement" fields={fields} narrow={narrow} onAnswerChange={(key, value) => setAnswers((all) => ({ ...all, [key]: value }))} textEditable={editable} zoom={1} /></DesignToolsContext.Provider>
+  return <DesignToolsContext.Provider value={DESIGN_TOOLS}><EditorCanvas allowFiles answers={answers} controller={current} designable={editable} documentTitle="Agreement" fields={fields} narrow={narrow} onAnswerChange={(key, value) => setAnswers((all) => ({ ...all, [key]: value }))} startTyping={startTyping} textEditable={editable} zoom={1} /></DesignToolsContext.Provider>
 }
+
+it("puts the cursor on a brand-new blank page, and leaves an empty page that was only opened, or can't be edited, as it was", async () => {
+  const typingLine = () => document.activeElement?.closest('[contenteditable="true"]')
+
+  root = mount()
+  await act(async () => root.render(<Canvas initial={createEmptyDocumentContent()} startTyping />))
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+  expect(controller.content.blocks).toMatchObject([{ type: "paragraph", text: "" }])
+  expect(typingLine()).toBeTruthy()
+  root.unmount()
+
+  for (const props of [{}, { editable: false, startTyping: true }]) {
+    root = mount()
+    await act(async () => root.render(<Canvas initial={createEmptyDocumentContent()} {...props} />))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(controller.content.blocks).toEqual([])
+    expect(typingLine()).toBeFalsy()
+    root.unmount()
+  }
+})
+
+it("never adds a line to a written page, even opened from a link that still says it is new", async () => {
+  root = mount()
+  await act(async () => root.render(<Canvas initial={TERMS} startTyping />))
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+  expect(controller.content.blocks).toEqual(TERMS.blocks)
+  root.unmount()
+})
 
 it("edits section titles, keeps an emptied title valid, switches rules and moves the caret into its text", async () => {
   root = mount()
@@ -300,4 +329,62 @@ it("fills in a page with nothing to design: answers go back, and a file field ho
   // Nothing to type into but its fields, and nothing to choose.
   expect(document.querySelector("[contenteditable]")).toBeNull()
   expect(document.querySelector('[aria-label="Section title"]')).toBeNull()
+})
+
+it("numbers a section's list as its clauses, and Tab sets an item in a level as (a), Shift+Tab out again", async () => {
+  const L = "70000000-0000-4000-8000-000000000031"
+  const clauses: TemplateContentV3 = {
+    ...createEmptyDocumentContent(),
+    layout: { ...createEmptyDocumentContent().layout, sectionNumbers: "clauses" },
+    blocks: [{ id: L, type: "numbered_list", items: ["Pay monthly.", "Late fees.", "Interest."] }],
+    sections: [{ id: S, label: "Terms", startBlockId: L, keepTogether: false, pageBreakBefore: false }],
+  }
+  root = mount()
+  await act(async () => root.render(<Canvas initial={clauses} />))
+  const item = (index: number) => document.querySelector<HTMLElement>(`[data-caret-key="${L}:${index}"]`)!
+  const markers = () => [0, 1, 2].map((index) => document.querySelector<HTMLElement>(`[data-line-key="${L}:${index}"]`)!.style.getPropertyValue("--marker"))
+  const press = (index: number, shiftKey = false) =>
+    act(async () => void item(index).dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab", shiftKey })))
+
+  expect(markers()).toEqual(['"1.1"', '"1.2"', '"1.3"'])
+
+  // The first item has nothing above to sit under.
+  await press(0)
+  await press(1)
+  expect(markers()).toEqual(['"1.1"', '"(a)"', '"1.2"'])
+
+  await press(1, true)
+  expect(markers()).toEqual(['"1.1"', '"1.2"', '"1.3"'])
+  expect(controller.content.blocks[0]).toMatchObject({ levels: undefined })
+})
+
+it("writes the header and footer in place after a double-click in the page's top or bottom margin", async () => {
+  root = mount()
+  await act(async () => root.render(<Canvas narrow={false} />))
+  const page = document.querySelector<HTMLElement>('[data-page="1"]')!
+  const height = parseFloat(page.style.height)
+  const type = (name: string, text: string) =>
+    act(async () => {
+      const input = document.querySelector<HTMLInputElement>(`[aria-label="${name}"]`)!
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, text)
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+
+  await act(async () => void page.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, clientY: 8 })))
+  // The band loads the first time it is needed.
+  await act(async () => { await import("./margin-text-band"); await new Promise((resolve) => setTimeout(resolve, 0)) })
+  expect(document.activeElement?.getAttribute("aria-label")).toBe("Header left")
+  await type("Header centre", "Form {page}")
+  expect(controller.content.layout.headerText).toEqual({ center: "Form {page}" })
+  await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" })))
+  expect(document.querySelector('[data-slot="margin-text-band"]')).toBeNull()
+  // A double-click in the writing area is the text's, not the header's or footer's.
+  await act(async () => void page.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, clientY: height / 2 })))
+  expect(document.querySelector('[data-slot="margin-text-band"]')).toBeNull()
+
+  await act(async () => void page.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, clientY: height - 8 })))
+  await type("Footer left", "Rev. 2")
+  expect(controller.content.layout.footerText).toEqual({ left: "Rev. 2" })
+  // A header shown on the first page only, written on the second, shows on every page.
+  expect(setMarginText({ ...controller.content.layout, headerPolicy: "first_page" }, "headerText", "left", "Draft", 2).headerPolicy).toBe("all_pages")
 })

@@ -76,6 +76,35 @@ export function setErrorReporter(reporter: ErrorReporter | null): void {
   activeReporter = reporter
 }
 
+/** Runs a scheduled job inside a check-in, as Sentry's cron monitors do. */
+export type CronMonitor = <T>(slug: string, schedule: string, job: () => Promise<T>) => Promise<T>
+
+let activeCronMonitor: CronMonitor | null = null
+
+/**
+ * Registers the process-wide cron monitor, or clears it with `null`; called
+ * once from Sentry instrumentation at boot.
+ *
+ * @param monitor - Monitor wrapping each scheduled run, or `null`.
+ */
+export function setCronMonitor(monitor: CronMonitor | null): void {
+  activeCronMonitor = monitor
+}
+
+/**
+ * Runs a scheduled job with a heartbeat, so a job that stops running, runs
+ * late or keeps failing raises an alert instead of going unnoticed. Without a
+ * monitor (local dev, CI, tests) it just runs the job.
+ *
+ * @param slug - The monitor's stable name.
+ * @param schedule - The job's crontab, in UTC.
+ * @param job - The run itself.
+ * @returns What the run returns; its error, unchanged.
+ */
+export function monitorCron<T>(slug: string, schedule: string, job: () => Promise<T>): Promise<T> {
+  return activeCronMonitor ? activeCronMonitor(slug, schedule, job) : job()
+}
+
 /**
  * Forwards an unexpected error to the registered reporter, if any.
  *

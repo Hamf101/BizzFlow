@@ -322,6 +322,8 @@ export function SelectableItem({
           pointer.current = event.pointerType
           held.current = false
         }}
+        // Marks the item while its tick shows, so its content can make room for it.
+        data-ticking={ticking ? "" : undefined}
         render={<Element />}
         role={role}
         style={style}
@@ -365,7 +367,7 @@ export function PhoneSelectButton(): ReactElement | null {
 
   return (
     <Button
-      className="h-11 rounded-[12px] bg-card px-4 font-normal md:hidden"
+      className="h-11 rounded-lg bg-card px-4 font-normal md:hidden"
       onClick={selection.phoneSelecting ? selection.clear : selection.start}
       type="button"
       variant="outline"

@@ -1,6 +1,4 @@
-import { NextResponse } from "next/server"
-
-import { createTemplateRouteErrorResponse, startFlowTurn } from "@/app/api/templates/_utils"
+import { createTemplateRouteErrorResponse, startFlowTurn, streamFlowTurn } from "@/app/api/templates/_utils"
 import { readTrustedJsonObject } from "@/lib/request-security"
 import { executeDocumentFlow } from "@/services/template-flow-service"
 
@@ -10,7 +8,7 @@ export const maxDuration = 300
 /**
  * Completes one Flow chat turn about a generated document's own page.
  *
- * @param request - JSON request with the editor's current page and the message.
+ * @param request - JSON request with the editor's current page, the message, and an optional uploaded form to recreate.
  * @param context - The document the turn is about.
  * @returns A staged candidate batch and the turn's messages, or a safe error.
  */
@@ -22,16 +20,16 @@ export async function POST(
     const { organizationId, userId } = await startFlowTurn()
     const { documentId } = await context.params
     const body = await readTrustedJsonObject(request)
-    const result = await executeDocumentFlow({
+    return await streamFlowTurn(request, "documents_flow", (onStage) => executeDocumentFlow({
       actorUserId: userId,
       documentId,
       draft: body.draft,
       instruction: body.instruction,
+      mentions: body.mentions,
       model: body.model,
       organizationId,
-    })
-
-    return NextResponse.json(result)
+      sourceDocumentId: body.sourceDocumentId,
+    }, { onStage }))
   } catch (error: unknown) {
     return createTemplateRouteErrorResponse(error, "documents_flow")
   }

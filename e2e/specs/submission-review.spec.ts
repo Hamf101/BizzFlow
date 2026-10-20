@@ -42,6 +42,13 @@ test.describe("submission review", () => {
 
     await manager.goto(`/submissions/${submissionId}`)
 
+    // The reviewer's next step sits above the form they're reviewing, not after all of it.
+    const startReview = manager.getByRole("button", { name: /start review/i })
+    const formTitle = await manager.getByText("Submission form", { exact: true }).elementHandle()
+    expect(
+      await startReview.evaluate((control, form) => Boolean(control.compareDocumentPosition(form as Node) & Node.DOCUMENT_POSITION_FOLLOWING), formTitle)
+    ).toBe(true)
+
     // Assigning a submitted item is what starts its review — there is no
     // separate "begin" control.
     await manager.getByRole("checkbox", { name: /^E2E manager/ }).check()

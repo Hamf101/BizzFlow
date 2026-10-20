@@ -19,6 +19,7 @@ import { normalizePdfInput } from "@/services/document-pdf/shared"
 import type { PdfFlowItem, PdfPagePlan } from "@/services/document-pdf/types"
 import { createPdfLayoutMetrics, getPdfColumnFrames, type PdfLayoutMetrics } from "@/services/document-pdf/layout"
 import { resizeTemplateLayout } from "@/services/templates/template-render-plan"
+import { createQuoteContent } from "@/types/template-calculation.test-support"
 import {
   createBlankTemplateContent,
   type TemplateContent
@@ -576,6 +577,62 @@ describe("document PDF service", () => {
     }
   })
 
+  it("prints every branch of a blank or fillable form under its rule in words, and only the chosen one once answered", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const petsId = "53000000-0000-4000-8000-000000000001"
+
+    content.blocks = [
+      { id: petsId, type: "checkbox_field", fieldKey: "pets", label: "Pets", required: false, helpText: null, checkedByDefault: false },
+      { id: "53000000-0000-4000-8000-000000000002", type: "text_field", fieldKey: "pet_name", label: "Pet name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: petsId, operator: "equals", value: true } }
+    ]
+    content.sections = []
+    content.fieldGroups = []
+    content.blockRules = []
+    input.signers = []
+    input.workflowStatus = "draft"
+
+    const printed = async (answers: Record<string, unknown>, fillable = false): Promise<{ fields: string[]; words: string }> => {
+      const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf({ ...input, answers }, { fillable }))
+
+      return { fields: pdf.getForm().getFields().map((field) => field.getName()), words: drawnTexts(pdf, 0).map(({ text }) => text).join(" ") }
+    }
+    const blank = await printed({})
+    const fillable = await printed({ pets: false }, true)
+    const answered = await printed({ pets: false })
+
+    expect(blank.words).toContain("If Pets is ticked:")
+    expect(blank.words).toContain("Pet name")
+    // Filled in a viewer, which runs no rules, so every branch has its field.
+    expect(fillable.words).toContain("If Pets is ticked:")
+    expect(fillable.fields).toEqual(["pets", "pet_name"])
+    expect(answered.words).not.toContain("If Pets")
+    expect(answered.words).not.toContain("Pet name")
+  })
+
+  it("prints what each formula works out, never a total it was handed", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+
+    input.content = createQuoteContent()
+    input.answers = { items: [["Desk", "2.5", "10.01", "1"]], total: "1.00" }
+    input.signers = []
+
+    const words = drawnTexts(await PDFDocument.load(await renderGeneratedDocumentPdf(input)), 0).map(({ text }) => text)
+    const fillable = await PDFDocument.load(await renderGeneratedDocumentPdf(input, { fillable: true }))
+    const fields = fillable.getForm().getFields().map((field) => field.getName())
+
+    // The table's Total row adds up its Amount column, beside the line itself and the Subtotal.
+    expect(words.filter((text) => text === "25.03")).toHaveLength(3)
+    expect(words.filter((text) => text === "Total")).toHaveLength(2)
+    expect(words).toContain("30.04")
+    expect(words).not.toContain("1.00")
+    // A viewer works nothing out, so a worked-out answer prints as words, not as a box to type in.
+    expect(fields).toContain("items.1.2")
+    expect(fields).not.toContain("items.1.4")
+    expect(fields).not.toContain("total")
+    expect(drawnTexts(fillable, 0).map(({ text }) => text)).toContain("30.04")
+  })
+
   it("prints a choice shown as radio buttons one option a line, inside the room the planner left, as one radio group", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
     const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
     const content = requireVersionThreeContent(input)
@@ -738,10 +795,10 @@ describe("document PDF service", () => {
     expect(name.x).toBeGreaterThan(metrics.margin + 20)
     expect(name.x).toBeLessThan(metrics.margin + metrics.contentWidth * 0.45)
     expect(name.y - (phone.y + phone.height)).toBeCloseTo(12, 5)
-    // A long label wraps at 45% of the width, and its line starts after it.
-    expect(long.x).toBeCloseTo(metrics.margin + metrics.contentWidth * 0.45 + 6, 5)
-    expect(long.x + long.width).toBeCloseTo(metrics.margin + metrics.contentWidth, 5)
-    expect(long.height).toBeGreaterThanOrEqual(30)
+    // A label past 45% of the width stands on its own line over a line the
+    // width of the column.
+    expect(long).toMatchObject({ height: 15, width: metrics.contentWidth, x: metrics.margin })
+    expect(phone.y - (long.y + long.height)).toBeCloseTo(12 + 15, 5)
     // A long answer is one multiline field over three ruled lines.
     expect(form.getTextField("line_3").isMultiline()).toBe(true)
     expect(form.getTextField("line_3").acroField.getWidgets()).toHaveLength(1)
@@ -753,13 +810,14 @@ describe("document PDF service", () => {
     expect(captions[0]?.y).toBe(notes.y - 10 - 56 - 2 - 8)
     // Side by side, the date's line is level with the signature's, over its caption.
     expect(box("signed_on").y).toBeCloseTo((captions[1]?.y ?? 0) + 2 + 8, 1)
-    // A wrapped label drops nothing: the three lines in its row sit level.
+    // A label too long for a narrow column stands over its line, and the
+    // three lines in its row still sit level.
     const [initial, first, last] = ["line_4", "line_5", "line_6"].map(box)
 
-    expect(initial.height).toBe(30)
+    expect(initial.height).toBe(15)
     expect(first.y).toBeCloseTo(initial.y, 1)
     expect(last.y).toBeCloseTo(initial.y, 1)
-    // Printed, an answer beside a wrapped label sits on its last line, just above the rule.
+    // Printed, the answer under a long label sits just above its rule.
     const printed = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
 
     expect(drawnTexts(printed, 0).some((drawn) => drawn.size === 10 && Math.abs(drawn.x - long.x) < 0.5 && Math.abs(drawn.y - (long.y + 2 + 15 - 10)) < 0.5)).toBe(true)
@@ -962,6 +1020,60 @@ describe("document PDF service", () => {
     expect((await titles("#F2C94C")).map((title) => title.color)).toEqual(letters.map(() => [0.07, 0.09, 0.13]))
   })
 
+  it("numbers clauses on from their section, 1.1 then (a) then (i), each level set further in", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const id = (n: number): string => `58100000-0000-4000-8000-${String(n).padStart(12, "0")}`
+
+    content.layout = { ...content.layout, sectionNumbers: "clauses", sectionStyle: "plain" }
+    content.blocks = [
+      { id: id(1), type: "numbered_list", items: ["The work.", "Its parts.", "Their pieces.", "Its timing."], levels: [0, 1, 2, 0] },
+      { id: id(2), type: "numbered_list", items: ["Fees are due monthly."] },
+    ]
+    content.sections = [
+      { id: id(11), label: "Services", startBlockId: id(1), pageBreakBefore: false, keepTogether: false },
+      { id: id(12), label: "Fees", startBlockId: id(2), pageBreakBefore: false, keepTogether: false },
+    ]
+    content.fieldGroups = []
+    content.blockRules = []
+    input.signers = []
+
+    const metrics = pdfMetrics(input)
+    const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+    const texts = drawnTexts(pdf, 0)
+    const at = (text: string) => texts.find((drawn) => drawn.text === text)
+
+    expect(at("1. Services")).toBeDefined()
+    // Each marker a level further in, and its words hanging clear of it, so a long item wraps under its words.
+    expect(["1.1", "(a)", "(i)", "1.2", "2.1"].map((marker) => (at(marker)?.x ?? 0) - metrics.margin)).toEqual([12, 30, 48, 12, 12])
+    expect(["The work.", "Its parts.", "Their pieces.", "Its timing."].map((words) => (at(words)?.x ?? 0) - metrics.margin)).toEqual([38, 56, 74, 38])
+  })
+
+  it("keeps long sub-clauses in a narrow column above the footer, measured in the width their words are drawn in", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: true })
+    const content = requireVersionThreeContent(input)
+    const id = (n: number): string => `58200000-0000-4000-8000-${String(n).padStart(12, "0")}`
+    const clause = "The supplier shall deliver the services described in the schedule with reasonable skill and care, in accordance with good industry practice."
+    const items = Array.from({ length: 10 }, (_value: unknown, index: number): string => (index < 2 ? "Services." : clause))
+
+    // Four lists side by side, their (a)-level items set 74 points into a column about 120 wide.
+    content.blocks = [1, 2, 3, 4].map((n: number) => ({ id: id(n), type: "numbered_list" as const, items, levels: items.map((_item, index: number) => Math.min(index, 2)) }))
+    content.sections = []
+    content.fieldGroups = [{ id: id(10), label: null, startBlockId: id(1), endBlockId: id(4), columns: 4, keepTogether: false }]
+    content.blockRules = []
+    input.signers = []
+
+    const metrics = pdfMetrics(input)
+    const flowBottom = metrics.flowTopY - metrics.pageCapacity
+    const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+
+    expect(pdf.getPageCount()).toBeGreaterThan(1)
+    pdf.getPages().forEach((_page, index: number) => {
+      // Everything above the footer's 7-point words stays inside the flow.
+      expect(Math.min(...drawnTexts(pdf, index).filter((piece) => piece.size >= 8).map((piece) => piece.y))).toBeGreaterThanOrEqual(flowBottom - 0.5)
+    })
+  })
+
   it("holds a boxed section's rows, cells and long text inside its edge over pages, open where a page breaks it", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
     const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
     const content = requireVersionThreeContent(input)
@@ -1122,7 +1234,8 @@ describe("document PDF service", () => {
     expect(a3Metrics.pageCapacity).toBeCloseTo(a4Metrics.pageCapacity, 0)
     expect(a3Metrics.contentWidth).toBeCloseTo(a4Metrics.contentWidth, 2)
     expect(createPdfPagePlans(a3)).toEqual(a4Pages)
-    expect(rendered.getPageCount()).toBe(a4Pages.length)
+    // And the signing certificate a completed document closes with.
+    expect(rendered.getPageCount()).toBe(a4Pages.length + 1)
     expect(rendered.getPage(0).getWidth()).toBeCloseTo(841.89, 1)
     expect(rendered.getPage(0).getHeight()).toBeCloseTo(1190.55, 1)
   })
@@ -1165,7 +1278,8 @@ describe("document PDF service", () => {
     const renderedDocument = await PDFDocument.load(buffer)
 
     expect(plannedPageCount).toBeGreaterThan(1)
-    expect(renderedDocument.getPageCount()).toBe(plannedPageCount)
+    // And the signing certificate a completed document closes with.
+    expect(renderedDocument.getPageCount()).toBe(plannedPageCount + 1)
   })
 
   it("renders byte-identical PDFs for the same persisted metadata timestamp", { timeout: 30_000 }, async () => {
@@ -1648,7 +1762,9 @@ function createPdfInput(options: {
   repeatFooter: boolean
   repeatHeader: boolean
 }): RenderGeneratedDocumentPdfInput {
-  const content = createBlankTemplateContent()
+  const blank = createBlankTemplateContent()
+  // At the preset margins the measurements below were taken at.
+  const content = { ...blank, layout: { ...blank.layout, margins: undefined } }
 
   return {
     documentId: "document-1",

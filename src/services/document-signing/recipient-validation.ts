@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import { DocumentSigningServiceError } from "@/services/document-signing/errors"
 import type {

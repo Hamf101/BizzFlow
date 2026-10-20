@@ -6,7 +6,7 @@ import { Check, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const ITEM_CLASS = cn(
-  "group/dropdown-menu-item relative flex cursor-default items-center gap-2 rounded-[8px] px-2 py-2 text-sm outline-hidden select-none",
+  "group/dropdown-menu-item relative flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-sm outline-hidden select-none",
   "focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
 )
 
@@ -41,7 +41,7 @@ function DropdownMenuContent({
       >
         <MenuPrimitive.Popup
           className={cn(
-            "z-50 max-h-(--available-height) min-w-32 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-[12px] border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none",
+            "z-50 max-h-(--available-height) min-w-32 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none",
             "transition-[scale,opacity] duration-100 ease-out data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0",
             className
           )}

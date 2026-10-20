@@ -7,6 +7,7 @@ import {
 
 const FULL_MEMBER_DESTINATIONS = [
   "/dashboard",
+  "/flow",
   "/people",
   "/documents",
   "/templates",
@@ -33,6 +34,7 @@ describe("getVisibleNavigationItems", () => {
       getVisibleNavigationItems("external_reviewer").map((item) => item.href)
     ).toEqual([
       "/dashboard",
+      "/flow",
       "/people",
       "/documents",
       "/submissions",
@@ -67,4 +69,18 @@ describe("getVisibleNavigationItems", () => {
       expect(primary).toHaveLength(Math.min(4, visible.length))
     }
   )
+
+  it.each(["owner_admin", "manager", "external_reviewer"] as const)("puts Submissions in a reviewer's phone bar (%s)", (role) => {
+    expect(getMobileNavigationLayout(role).primary.map((item) => item.href)).toContain("/submissions")
+  })
+
+  it("never gives Flow a phone bar slot, even when a saved order puts it first", () => {
+    const { overflow, primary } = getMobileNavigationLayout("owner_admin", { labels: {}, order: ["/flow", "/settings", "/dashboard"] })
+    expect(primary.map((item) => item.href)).toEqual(["/settings", "/dashboard", "/people", "/documents"])
+    expect(overflow.map((item) => item.href)).toContain("/flow")
+  })
+
+  it("keeps Templates in the phone bar of someone who does not review", () => {
+    expect(getMobileNavigationLayout("staff").primary.map((item) => item.href)).toContain("/templates")
+  })
 })

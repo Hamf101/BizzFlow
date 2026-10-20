@@ -16,7 +16,8 @@ import {
   requireSubmissionPermission,
   runSubmissionOperation,
 } from "@/services/submissions/shared"
-import { parseSubmissionRow, type Submission } from "@/types/submission"
+import { parseSubmissionRow } from "@/services/submissions/shared"
+import type { Submission } from "@/types/submission"
 import { parseSubmissionSuggestionRow, type SubmissionSuggestion } from "@/types/submission-review"
 
 const SUGGESTION_COLUMNS =
@@ -167,6 +168,7 @@ export async function listSubmissionSuggestions(
 
 function suggestableKeys(submission: Submission): string[] {
   return submission.templateSnapshot.blocks.flatMap((block) =>
-    SUGGESTABLE.has(block.type) && "fieldKey" in block ? [block.fieldKey] : []
+    // A worked-out answer follows what it is worked out from, and is never suggested.
+    SUGGESTABLE.has(block.type) && "fieldKey" in block && !(block.type === "text_field" && block.formula) ? [block.fieldKey] : []
   )
 }

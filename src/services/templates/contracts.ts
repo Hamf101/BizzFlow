@@ -1,5 +1,6 @@
 import type { ListSort } from "@/lib/list-state"
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
+import type { RecordAuditLogInput } from "@/services/audit-service"
 import type {
   DocumentTemplateCard,
   DocumentTemplateStatus,
@@ -32,6 +33,8 @@ export type ListTemplatePageInput = TemplateActorInput & {
   pageSize: number
   /** Title search text; matched literally, ignoring case. */
   query?: string
+  /** Lists only the templates in Trash; every other list leaves them out. */
+  trash?: boolean
   sort: ListSort<TemplateSortKey>
   statuses?: readonly DocumentTemplateStatus[]
 }
@@ -71,6 +74,11 @@ export type ChangeDocumentTemplateStatusInput = GetDocumentTemplateInput
 
 export type DuplicateDocumentTemplateInput = GetDocumentTemplateInput
 
+/** A template in Trash, and its exact title typed to delete it for good. */
+export type PurgeTrashedDocumentTemplateInput = GetDocumentTemplateInput & {
+  confirmationTitle: string
+}
+
 export type SetDocumentTemplateCategoryInput = GetDocumentTemplateInput & {
   category: string | null
 }
@@ -79,7 +87,7 @@ export type SetDocumentTemplateCategoryInput = GetDocumentTemplateInput & {
 export const MAX_BULK_TEMPLATES = 200
 
 export type ChangeDocumentTemplatesInput = TemplateActorInput & {
-  change: "archive" | "restore" | "duplicate" | "category"
+  change: "archive" | "restore" | "trash" | "duplicate" | "category"
   /** The category to set; only read by the `category` change. */
   category?: string | null
   templateIds: readonly string[]
@@ -92,6 +100,8 @@ export type ChangeDocumentTemplatesResult = {
   /** The new drafts a duplicate made, in the order of `changed`. */
   created: string[]
   failed: number
+  /** How many were refused because people have sent answers through them, which only archiving allows. */
+  answered: number
   /** For a category change: what each changed template's category was. */
   previousCategories: Record<string, string | null>
 }
@@ -112,4 +122,5 @@ export type TemplateServiceDeps = {
   client?: TemplateServiceClient
   createId?: () => string
   now?: () => Date
+  recordAuditLog?: (input: RecordAuditLogInput) => Promise<unknown>
 }

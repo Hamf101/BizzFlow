@@ -1,3 +1,4 @@
+import { loadMemberReach } from "@/services/member-reach"
 import type { SharedMessage } from "@/components/sharing/sharing-notices"
 import { getOrganizationRoleFromSubject, isOrganizationRole, type OrganizationRole } from "@/lib/permissions"
 import { sendNotice } from "@/services/documents/sharing-notice"
@@ -12,14 +13,16 @@ import type {
 import { SubmissionServiceError } from "@/services/submissions/errors"
 import type { SubmissionListFilters } from "@/services/submissions/list-filters"
 import {
+  assertSubmissionVisible,
   createSubmissionDatabaseError,
   createSubmissionMutationError,
   getSubmissionById,
   getSubmissionClient,
+  parseSubmissionRow,
   requireSubmissionPermission,
   runSubmissionOperation,
 } from "@/services/submissions/shared"
-import { parseSubmissionRow, type Submission } from "@/types/submission"
+import type { Submission } from "@/types/submission"
 import { parseSubmissionReviewerRow, type SubmissionReviewer, type SubmissionReviewTally } from "@/types/submission-review"
 import { LOWERCASE_UUID_PATTERN } from "@/services/input"
 
@@ -49,7 +52,7 @@ export async function setInternalSubmissionReviewers(
     async (): Promise<Submission> => {
       const client = getSubmissionClient(deps)
 
-      await requireSubmissionPermission(
+      const subject = await requireSubmissionPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -59,6 +62,7 @@ export async function setInternalSubmissionReviewers(
 
       // The database keeps reviewers someone more senior chose out of a junior's hands.
       const current = await getSubmissionById(client, input.organizationId, input.submissionId)
+      await assertSubmissionVisible(client, getOrganizationRoleFromSubject(subject), current, input.actorUserId)
       const reviewerIds = input.reviewerIds.map((id) => id.trim().toLowerCase())
 
       if (
@@ -189,6 +193,7 @@ export async function shareInternalSubmission(
       // The form lists only the people this person can see; anyone it was shared
       // with whom they cannot see stays shared.
       const submission = await getSubmissionById(client, input.organizationId, input.submissionId)
+      await assertSubmissionVisible(client, getOrganizationRoleFromSubject(subject), submission, input.actorUserId)
       const { all, visible } = await readReviewers(client, submission, { role: getOrganizationRoleFromSubject(subject), userId: input.actorUserId })
       const hidden = all.filter((reviewer) => !reviewer.canApprove && !visible.includes(reviewer)).map((reviewer) => reviewer.userId)
       const userIds = [...new Set([...ticked, ...hidden])]
@@ -256,24 +261,30 @@ export async function listSubmissionReviewers(
  * @throws SubmissionServiceError when the read fails.
  */
 export async function withReviewedIds(client: SubmissionServiceClient, filters: SubmissionListFilters): Promise<SubmissionListFilters> {
-  if (filters.role !== "external_reviewer" && filters.role !== "staff") {
+  // An owner sees everything; nobody else's list is settled before their reach is known.
+  if (filters.role === "owner_admin") {
     return filters
   }
 
-  const { data, error } = await client
-    .from("submission_reviewers")
-    .select("submission_id")
-    .eq("org_id", filters.organizationId)
-    .eq("user_id", filters.actorUserId)
+  const [reviewed, reach] = await Promise.all([
+    client.from("submission_reviewers").select("submission_id").eq("org_id", filters.organizationId).eq("user_id", filters.actorUserId),
+    loadMemberReach(client, filters.organizationId, filters.actorUserId),
+  ])
 
-  if (error || !data) {
-    throw createSubmissionDatabaseError(error, "Unable to load the submissions you review.")
+  if (reviewed.error || !reviewed.data) {
+    throw createSubmissionDatabaseError(reviewed.error, "Unable to load the submissions you review.")
   }
 
   // ponytail: one read is capped at PostgREST's row limit, and the ids ride in the list's URL; someone on
   // hundreds of submissions would need a set-wise list function like list_workspace_documents.
-  return { ...filters, reviewedIds: data.map((row) => String(row.submission_id)) }
+  return {
+    ...filters,
+    reviewedIds: reviewed.data.map((row) => String(row.submission_id)),
+    supervisedIds: reach.supervised,
+    visibleCreatorIds: reach.visible,
+  }
 }
+
 
 /**
  * Whether the viewer is the person who assigned the reviewers, and so the one

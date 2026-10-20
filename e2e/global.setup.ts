@@ -12,6 +12,7 @@ import {
 } from "./support/paths"
 import {
   createAdminClient,
+  DEMO_TENANT,
   ORGANIZATION_ROLES,
   seedTenant,
   type OrganizationRole,
@@ -72,7 +73,7 @@ setup("seed the shared tenant and sign every role in", async ({ browser }) => {
 
   await mkdir(authStateDirectory(), { recursive: true })
 
-  const tenant = await seedTenant(admin)
+  const tenant = await seedTenant(admin, undefined, process.env.E2E_DEMO ? DEMO_TENANT : undefined)
 
   await writeFile(TENANT_STATE_PATH, JSON.stringify(tenant, null, 2), "utf8")
 

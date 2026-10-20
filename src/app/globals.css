@@ -81,10 +81,18 @@
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* One corner scale, six steps; nothing in src uses an arbitrary radius.
+     xs  marks inside controls: checkboxes, swatches, page sheets
+     sm  badges and chips
+     md  controls: buttons, inputs, selects, menu rows, alerts
+     lg  surfaces: cards, menus, popovers, toasts
+     xl  big surfaces: dialogs, sheets, the search panel
+     full  pills, avatars, switches */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
   --color-canvas: var(--canvas);
   --color-auth-ground: var(--auth-ground);
   --color-background: var(--background);
@@ -212,10 +220,8 @@
 
   .editorial-kicker {
     font-family: var(--font-sans);
-    font-size: 0.625rem;
+    font-size: 0.75rem;
     line-height: 1rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
   }
 }
 
@@ -250,6 +256,8 @@
    */
   .auth-fold-float {
     animation: auth-fold-float 10s ease-in-out infinite alternate;
+    /* The lean toward the pointer (auth-backdrop.tsx): each move retargets it from where it is. */
+    transition: translate 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   /*
@@ -302,6 +310,42 @@
   .auth-fold-wave[data-on="true"] {
     opacity: 1;
     stroke-dashoffset: 0;
+  }
+}
+
+/*
+ * Flow at work (flow-message.tsx): each piece of its mark eases out from the
+ * page's middle and back, on its own pace, start, way and turn, and the stage
+ * it is on rises in, then breathes.
+ */
+.flow-mark-working polygon {
+  animation: flow-mark-part var(--p) cubic-bezier(0.45, 0, 0.55, 1) var(--l) infinite alternate;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.flow-working-now {
+  animation:
+    flow-working-rise 0.25s ease-out,
+    flow-working-breathe 1.6s ease-in-out 0.25s infinite;
+}
+
+@keyframes flow-mark-part {
+  to {
+    transform: translate(var(--x), var(--y)) rotate(var(--r));
+  }
+}
+
+@keyframes flow-working-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes flow-working-breathe {
+  50% {
+    opacity: 0.55;
   }
 }
 
@@ -411,4 +455,58 @@
   --muted-foreground: #5d5763;
   --border: #cfc8bf;
   --input: #cfc8bf;
+  /* Ink that turns over with a dark screen stays as printed on paper. */
+  --doc-ink-from: 0;
+  --doc-ink-by: 1;
+}
+
+/*
+ * Nav icons: each moves the way its page changes when its link is pointed at
+ * or pressed. Flow's own (nav-icons.tsx) marks its moving part with data-move;
+ * Lucide's move whole. Only in navigation, so
+ * the same icon elsewhere on a page stays still.
+ */
+.nav-icon *,
+:is(nav, header, aside) :is(.lucide-search, .lucide-folder, .lucide-list-checks, .lucide-clipboard-check, .lucide-settings, .lucide-layout-dashboard, .lucide-users, .lucide-layout-template, .lucide-inbox) {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.45s cubic-bezier(0.3, 1.4, 0.5, 1), opacity 0.3s;
+}
+:is(a, button):is(:hover, :active) .nav-icon [data-move="swarm"] { transform: rotate(120deg) scale(1.08); transition-duration: 0.9s; }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-settings { transform: rotate(120deg); transition-duration: 0.7s; }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-search { transform: rotate(-14deg); }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-folder { transform: translateY(-1.5px) rotate(-4deg); }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-layout-dashboard { transform: scale(1.1); }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-users { transform: translateY(-1.5px); }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-layout-template { transform: rotate(-8deg); }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-inbox { transform: translateY(1.5px); }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) :is(.lucide-list-checks, .lucide-clipboard-check) { transform: scale(1.08); }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) :is(.lucide-list-checks, .lucide-clipboard-check) path:is([d^="m3"], [d^="m9"]) {
+  stroke-dasharray: 9;
+  animation: nav-icon-tick 0.5s ease both;
+}
+@keyframes nav-icon-tick { from { stroke-dashoffset: 9; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .nav-icon *,
+  :is(nav, header, aside) :is(.lucide-search, .lucide-folder, .lucide-list-checks, .lucide-clipboard-check, .lucide-settings, .lucide-layout-dashboard, .lucide-users, .lucide-layout-template, .lucide-inbox),
+  :is(nav, header, aside) :is(.lucide-list-checks, .lucide-clipboard-check) path {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/*
+ * People's org chart: on a phone, teams nest as an indented list; from md up
+ * they hang as a tree, each team joined to the one above by drawn lines.
+ */
+.org-tree ul { margin: 0.75rem 0 0 0.75rem; padding: 0 0 0 0.75rem; list-style: none; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.75rem; }
+@media (min-width: 48rem) {
+  .org-tree ul { position: relative; flex-direction: row; justify-content: center; gap: 0; margin: 0; padding: 1.5rem 0 0; border: 0; }
+  .org-tree ul::before { content: ""; position: absolute; top: 0; left: 50%; height: 1.5rem; border-left: 1px solid var(--border); }
+  .org-tree li { position: relative; display: flex; flex-direction: column; align-items: center; padding: 1.5rem 0.5rem 0; }
+  .org-tree li::before, .org-tree li::after { content: ""; position: absolute; top: 0; width: 50%; height: 1.5rem; border-top: 1px solid var(--border); }
+  .org-tree li::before { right: 50%; }
+  .org-tree li::after { left: 50%; border-left: 1px solid var(--border); }
+  .org-tree li:first-child::before, .org-tree li:last-child::after { border-top: 0; }
+  .org-tree li:only-child::before { display: none; }
 }

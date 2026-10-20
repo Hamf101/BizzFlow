@@ -1,8 +1,8 @@
 import {
-  ArrowDownToLine,
   Check,
   CircleCheck,
   Eye,
+  Inbox,
   type LucideIcon,
   MessageSquareWarning,
   PencilLine,
@@ -27,7 +27,8 @@ type SubmissionStatusLook = {
 
 const SUBMISSION_STATUS_LOOKS: Record<SubmissionStatus, SubmissionStatusLook> = {
   draft: { icon: PencilLine, step: 1, tone: "text-muted-foreground" },
-  submitted: { icon: ArrowDownToLine, step: 2, tone: "text-primary" },
+  // Received, as Submissions shows it in the menu; an arrow read as a download.
+  submitted: { icon: Inbox, step: 2, tone: "text-primary" },
   in_review: { icon: Eye, step: 3, tone: "text-primary" },
   needs_changes: { icon: MessageSquareWarning, step: 3, tone: "text-warning" },
   approved: { icon: Check, step: 4, tone: "text-success" },

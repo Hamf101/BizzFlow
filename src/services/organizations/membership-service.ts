@@ -1,8 +1,9 @@
+import { loadMemberReach } from "@/services/member-reach"
 import {
   canPerformOrganizationAction,
   canInviteMembers,
 } from "@/lib/permissions"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, type AdminSupabaseClient } from "@/lib/supabase/admin"
 import type {
   OrganizationMutationDeps,
   OrganizationPeople,
@@ -61,7 +62,15 @@ export async function listOrganizationPeople(
         )
       }
 
-      const memberships = await listActiveMemberships(client, organizationId)
+      // Invites, roles and who the member may see don't wait on the members' profiles.
+      const [allMemberships, invites, roles, visible] = await Promise.all([
+        listActiveMemberships(client, organizationId),
+        canInviteMembers(actorMembership) ? listManageableInvites(client, organizationId) : [],
+        listOrganizationRoleRecords(client, organizationId),
+        // An owner sees everyone; anyone else as far as their role reaches.
+        actorMembership.role === "owner_admin" ? null : listVisibleMemberIds(client, organizationId, userId),
+      ])
+      const memberships = visible ? allMemberships.filter((membership) => visible.has(membership.userId)) : allMemberships
       const profiles = await listProfilesByUserIds(
         client,
         memberships.map(
@@ -92,10 +101,8 @@ export async function listOrganizationPeople(
             }
           }
         ),
-        invites: canInviteMembers(actorMembership)
-          ? await listManageableInvites(client, organizationId)
-          : [],
-        roles: await listOrganizationRoleRecords(client, organizationId),
+        invites,
+        roles,
       }
     }
   )
@@ -342,4 +349,26 @@ export async function updateNotificationPreferences(
       }
     }
   )
+}
+
+/**
+ * The members someone may see, by their role's reach and where they sit in
+ * the workspace's teams and reporting lines (see visible_member_ids).
+ *
+ * @param client - Trusted database client.
+ * @param organizationId - Tenant identifier.
+ * @param userId - The member looking.
+ * @returns Their user ids, themselves included.
+ */
+export async function listVisibleMemberIds(
+  client: Pick<AdminSupabaseClient, "rpc">,
+  organizationId: string,
+  userId: string
+): Promise<Set<string> | null> {
+  // The same answer every other list on the page uses, asked once.
+  const { visible } = await loadMemberReach(client, organizationId, userId).catch(() => {
+    throw new OrganizationServiceError("Unable to load who you can see.", 500)
+  })
+
+  return visible ? new Set(visible) : null
 }

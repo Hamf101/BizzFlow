@@ -29,6 +29,7 @@ import type {
   SubmissionCommentRow,
 } from "@/types/submission-review"
 import type { SavedViewRecord } from "@/types/saved-view"
+import type { SheetContent } from "@/types/sheet"
 import type { TemplateAnswerValue } from "@/types/template-answer"
 
 type DatabaseOrganizationRole =
@@ -90,6 +91,7 @@ type MembershipRow = Record<string, unknown> & {
   status: DatabaseMembershipStatus
   email_notifications_enabled: boolean
   sms_notifications_enabled: boolean
+  manager_user_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -100,6 +102,7 @@ type OrganizationRoleRow = Record<string, unknown> & {
   system_key: DatabaseOrganizationRole | null
   name: string
   permissions: string[] | null
+  visibility_scope?: "branch" | "everyone" | "inviter" | null
   archived_at: string | null
   created_at: string
   updated_at: string
@@ -222,6 +225,7 @@ type AdminDocumentRow = DocumentRow & {
   template_id: string | null
   template_revision: number | null
   template_snapshot: TemplateContent | null
+  sheet_content: SheetContent | null
 }
 
 type AdminDocumentVersionRow = DocumentVersionRow & {
@@ -546,6 +550,16 @@ export type AdminDatabase = {
           Pick<OrganizationRoleRow, "org_id" | "name">,
         Partial<OrganizationRoleRow>
       >
+      org_units: DatabaseTable<
+        { id: string; org_id: string; parent_id: string | null; name: string; created_at: string; updated_at: string },
+        { id?: string; org_id: string; parent_id: string | null; name: string },
+        { name?: string; parent_id?: string | null }
+      >
+      org_unit_members: DatabaseTable<
+        { org_id: string; unit_id: string; user_id: string; is_lead: boolean; created_at: string },
+        { org_id: string; unit_id: string; user_id: string; is_lead?: boolean },
+        { is_lead?: boolean }
+      >
       saved_list_views: DatabaseTable<
         SavedViewRecord,
         Pick<
@@ -645,6 +659,11 @@ export type AdminDatabase = {
         DocumentSigningRecipientRow,
         DocumentSigningRecipientInsert,
         Partial<DocumentSigningRecipientRow>
+      >
+      document_signed_copy_links: DatabaseTable<
+        { id: string; org_id: string; document_id: string; email: string; token_hash: string; expires_at: string; created_at: string },
+        { org_id: string; document_id: string; email: string; token_hash: string; expires_at?: string },
+        Record<string, never>
       >
       document_recent_accesses: DatabaseTable<
         DocumentRecentAccessRow,
@@ -901,6 +920,21 @@ export type AdminDatabase = {
         }
         Returns: number
       }
+      purge_trashed_document_template: {
+        Args: {
+          target_org_id: string
+          target_template_id: string
+          target_actor_user_id: string
+          target_confirmation_title: string
+        }
+        Returns: undefined
+      }
+      purge_due_trashed_document_templates: {
+        Args: {
+          target_limit: number
+        }
+        Returns: number
+      }
       lease_resource_purge_objects: {
         Args: {
           target_limit: number
@@ -1026,14 +1060,43 @@ export type AdminDatabase = {
           target_values: Record<string, unknown>
           target_signature_data: Record<string, unknown> | null
           target_initials_data: Record<string, unknown> | null
+          target_expected_values?: Record<string, unknown>
+          target_consented?: boolean | null
+          target_ip?: string | null
         }
         Returns: string
+      }
+      cancel_document_signing: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+        }
+        Returns: { id: string; name: string; email: string; status: string }[]
+      }
+      member_reach: {
+        Args: { target_org_id: string; target_user_id: string }
+        Returns: { everyone: boolean; supervised: string[]; visible: string[] | null }
+      }
+      visible_member_ids: {
+        Args: { target_org_id: string; target_user_id: string }
+        Returns: string[]
+      }
+      decline_document_signing: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_recipient_id: string
+          target_token_hash: string
+          target_reason: string
+        }
+        Returns: { id: string; name: string; email: string; status: string }[]
       }
       merge_generated_document_answers: {
         Args: {
           target_org_id: string
           target_document_id: string
           target_values: Record<string, unknown>
+          target_expected_values?: Record<string, unknown>
         }
         Returns: Record<string, unknown>
       }

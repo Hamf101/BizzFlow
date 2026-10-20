@@ -17,7 +17,7 @@ import type {
 } from "@/types/task"
 
 /** Narrow trusted Supabase client used by task services. */
-export type TaskServiceClient = Pick<AdminSupabaseClient, "from">
+export type TaskServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
 
 /** Scalar values permitted in task operation logs. */
 export type TaskLogValue = string | number | boolean | null | undefined
@@ -63,6 +63,8 @@ export type ListTasksInput = TaskActorInput & {
 
 /** Input for one page of the tenant task list. */
 export type ListTaskPageInput = TaskActorInput & {
+  /** False when the caller shows the rows only, so no total is counted. */
+  withTotal?: boolean
   assignedTo?: string
   /** One-based page number. */
   page: number

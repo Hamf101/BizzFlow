@@ -7,8 +7,7 @@ import {
   enforceActionRateLimit,
   enforceOutboundEmailRateLimit,
 } from "@/lib/action-rate-limit"
-import { getErrorStatusCode } from "@/lib/action-result"
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 import {
   ActionError,
   loadActionContext,
@@ -18,15 +17,20 @@ import {
 } from "@/lib/form-action"
 import { getFormString } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
+import { toSaveFailure } from "@/lib/save-failure"
 import { findGuestOrganizationId } from "@/services/document-service"
 import type { SaveResult } from "@/components/editor/use-autosave"
 import {
+  cancelDocumentSigning,
+  fillGeneratedDocumentAnswers,
   resendDocumentSigningInvitation,
   saveGeneratedDocumentAnswers,
   sendDocumentForSigning,
   updateGeneratedDocumentContent,
 } from "@/services/document-signing-service"
+import { createDocumentCopy } from "@/services/template-service"
 import type { DocumentRecipientInput } from "@/types/signing"
+import type { FlowFillResult } from "@/types/template-flow"
 
 // The signing services check the actor's document access and permission themselves.
 const NO_ORGANIZATION = "Create an organization before managing documents."
@@ -87,22 +91,24 @@ export async function saveDocumentAnswersAction(formData: FormData): Promise<Sav
   }
 }
 
-function toSaveFailure(error: unknown, eventName: string, documentId: string): SaveResult {
-  if (error instanceof AuthenticationError) {
-    return { message: "Sign in again to keep saving.", ok: false, status: 401 }
-  }
+/**
+ * Fills a document with the answers Flow read off the form it recreated,
+ * keeping only those its fields take.
+ *
+ * @param documentId - The document.
+ * @param answers - The answers, keyed by field key; the service checks each.
+ * @returns The answers the document now holds and how many fit, or why not.
+ */
+export async function fillDocumentAnswersAction(documentId: string, answers: unknown): Promise<FlowFillResult> {
+  try {
+    const id = requireFormId(documentId, "Document id")
+    const { dropped, kept, view } = await fillGeneratedDocumentAnswers({ ...(await loadFillActionContext(id)), answers, documentId: id })
 
-  const statusCode = getErrorStatusCode(error) ?? 500
+    return { answers: view.answers, dropped, kept, ok: true }
+  } catch (error: unknown) {
+    const failure = toSaveFailure(error, "generated_document_answers_fill_failed", documentId)
 
-  console.warn(eventName, {
-    documentId,
-    reason: error instanceof Error ? error.message : "Unknown generated document save error",
-  })
-
-  return {
-    message: statusCode === 500 ? "The document could not be saved." : (error as Error).message,
-    ok: false,
-    status: statusCode,
+    return { message: failure.ok ? "The answers couldn't be filled in." : failure.message, ok: false }
   }
 }
 
@@ -134,12 +140,14 @@ export async function sendGeneratedDocumentAction(
     run: async () => {
       const { actor } = await loadActionContext(NO_ORGANIZATION)
 
-      await sendDocumentForSigning({
+      const { undelivered } = await sendDocumentForSigning({
         ...actor,
         documentId: requireFormId(documentId, "Document id"),
         recipients: parseRecipientCollection(getFormString(formData, "recipients")),
       })
       revalidateDocumentEditor(documentId)
+
+      return undelivered > 0 ? { code: "signing_invitations_partly_sent" } : undefined
     },
   })
 }
@@ -187,6 +195,60 @@ export async function resendGeneratedDocumentInvitationAction(
         recipientId: requireFormId(recipientId, "Recipient id"),
       })
       revalidateDocumentEditor(documentId)
+    },
+  })
+}
+
+/**
+ * Takes a document awaiting signatures back to a draft to edit, revoking every
+ * signer's link and telling each of them by email.
+ *
+ * @param formData - Generated document id.
+ * @returns Never returns; redirects back to the editor, now editable.
+ */
+export async function cancelDocumentSigningAction(formData: FormData): Promise<void> {
+  const documentId = getFormString(formData, "documentId")
+  const editorPath = getDocumentEditorPath(documentId)
+
+  // It emails every signer, so it spends the member's outbound budget as a
+  // send does. Both calls redirect by throwing; keep them outside the run.
+  const user = await loadAuthenticatedPageUser(editorPath)
+  await enforceOutboundEmailRateLimit({ userId: user.id, redirectPath: editorPath })
+
+  await runFormAction({
+    event: "generated_document_cancel_signing_action",
+    log: { documentId },
+    path: editorPath,
+    success: "signing_cancelled",
+    run: async () => {
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
+
+      await cancelDocumentSigning({ ...actor, documentId: requireFormId(documentId, "Document id") })
+      revalidateDocumentEditor(documentId)
+    },
+  })
+}
+
+/**
+ * Makes a new draft of a document, without its signatures, and opens it.
+ *
+ * @param formData - The id of the document to copy.
+ * @returns Never returns; redirects to the copy's editor.
+ */
+export async function copyDocumentAction(formData: FormData): Promise<void> {
+  const documentId = getFormString(formData, "documentId")
+
+  await runFormAction({
+    event: "generated_document_copy_action",
+    log: { documentId },
+    path: getDocumentEditorPath(documentId),
+    success: "document_created",
+    run: async () => {
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
+      const copy = await createDocumentCopy({ ...actor, documentId: requireFormId(documentId, "Document id") })
+
+      revalidatePath("/documents")
+      return { path: getDocumentEditorPath(copy.documentId) }
     },
   })
 }

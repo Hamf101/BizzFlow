@@ -33,6 +33,8 @@ const WORKFLOW_STATUSES: readonly GeneratedDocumentWorkflowStatus[] = [
 export type DocumentCard = {
   /** The document's first page, or null for an upload or an unreadable page. */
   content: TemplateContent | null
+  /** An upload's current file type, such as application/pdf, when asked for; null for a generated document. */
+  contentType: string | null
   id: string
   /** Where a generated document stands; null for an upload. */
   workflowStatus: GeneratedDocumentWorkflowStatus | null
@@ -80,22 +82,22 @@ export async function listDocumentCards(
       const reachable = input.documentIds.filter((id: string): boolean =>
         access.has(id)
       )
-      const statuses = await readWorkflowStatuses(
-        client,
-        input.organizationId,
-        reachable
-      )
-      const contents = await readCardContents(
-        client,
-        input.organizationId,
-        input.contentIds
-          .filter((id: string): boolean => access.has(id))
-          .slice(0, MAX_DOCUMENT_CARD_CONTENTS)
-      )
+      const [statuses, types, contents] = await Promise.all([
+        readWorkflowStatuses(client, input.organizationId, reachable),
+        input.withContentTypes ? readUploadTypes(client, input.organizationId, reachable) : new Map<string, string>(),
+        readCardContents(
+          client,
+          input.organizationId,
+          input.contentIds
+            .filter((id: string): boolean => access.has(id))
+            .slice(0, MAX_DOCUMENT_CARD_CONTENTS)
+        ),
+      ])
 
       return reachable.map(
         (id: string): DocumentCard => ({
           content: contents.get(id) ?? null,
+          contentType: types.get(id) ?? null,
           id,
           workflowStatus: statuses.get(id) ?? null,
         })
@@ -135,6 +137,50 @@ async function readWorkflowStatuses(
   }
 
   return statuses
+}
+
+// What each upload's current version is, so the menus offer only what fits it.
+async function readUploadTypes(
+  client: DocumentServiceClient,
+  organizationId: string,
+  documentIds: readonly string[]
+): Promise<Map<string, string>> {
+  const types = new Map<string, string>()
+
+  for (let start = 0; start < documentIds.length; start += STATUS_READ_BATCH) {
+    const { data: documents, error } = await client
+      .from("documents")
+      .select("id,current_version_id")
+      .eq("org_id", organizationId)
+      .in("id", documentIds.slice(start, start + STATUS_READ_BATCH))
+
+    if (error || !documents) {
+      throw createSupabaseServiceError(error, "Unable to load document types.")
+    }
+
+    // A generated document has no file, so no version.
+    const versionIds = documents.flatMap((row: { current_version_id: string | null }) => row.current_version_id ?? [])
+
+    if (versionIds.length === 0) {
+      continue
+    }
+
+    const { data: versions, error: versionError } = await client
+      .from("document_versions")
+      .select("document_id,content_type")
+      .eq("org_id", organizationId)
+      .in("id", versionIds)
+
+    if (versionError || !versions) {
+      throw createSupabaseServiceError(versionError, "Unable to load document types.")
+    }
+
+    for (const row of versions as Array<{ content_type: string; document_id: string }>) {
+      types.set(row.document_id, row.content_type)
+    }
+  }
+
+  return types
 }
 
 async function readCardContents(

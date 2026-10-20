@@ -111,7 +111,7 @@ test.describe("responsive interaction evidence", () => {
     const viewports = [320, 390, 430, 768, 1024, 1440] as const
 
     await page.goto("/templates")
-    await expect(page.getByRole("link", { name: "Create template" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Create template" })).toBeVisible()
 
     for (const width of viewports) {
       await page.setViewportSize({ height: 900, width })
@@ -121,7 +121,7 @@ test.describe("responsive interaction evidence", () => {
       const mobileNavigation = page.getByRole("navigation", {
         name: "Mobile navigation",
       })
-      const primaryAction = page.getByRole("link", { name: "Create template" })
+      const primaryAction = page.getByRole("button", { name: "Create template" })
 
       await expectNoHorizontalPageClipping(page)
       await expectReachablePrimaryAction(primaryAction, page)
@@ -360,7 +360,7 @@ test("Tab stays inside an open dialog, however many times it is pressed", async 
   }
 })
 
-test("an icon tile's actions come before its name in the Tab order, where they sit on the tile", async ({ admin, pageAs, tenant }) => {
+test("Tab meets an icon tile's name, then its actions, in the order the eye reads them on the tile", async ({ admin, pageAs, tenant }) => {
   const name = uniqueName("Order")
   const owner = tenant.users.owner_admin
   await seedFolder(admin, tenant.organizationId, owner.id, name)
@@ -371,13 +371,17 @@ test("an icon tile's actions come before its name in the Tab order, where they s
   await page.goto("/documents")
   await waitForHydration(tile)
 
-  const actionsFirst = await tile.evaluate((element) => {
+  // The name opens the tile's top row and its actions close it, so Tab goes name, then actions.
+  const placed = await tile.evaluate((element) => {
     const actions = element.querySelector('button[aria-label^="Actions for"]') as Element
     const link = element.querySelector('[data-slot="file-name"]') as Element
-    return Boolean(actions.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING)
+    return {
+      actionsAfterName: Boolean(link.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING),
+      actionsRightOfName: actions.getBoundingClientRect().left >= link.getBoundingClientRect().left,
+    }
   })
 
-  expect(actionsFirst).toBe(true)
+  expect(placed).toEqual({ actionsAfterName: true, actionsRightOfName: true })
 })
 
 test("a required public form field shows its error on the page and ties it to the field", async ({ admin, browser, tenant }) => {
@@ -415,6 +419,7 @@ test("a signer without a pointing device can type their signature", async ({ adm
   await page.goto(`/sign/${signingToken}`)
   await waitForHydration(page.getByRole("button", { name: "Submit signature" }))
   await page.getByLabel("Or type your signature").fill("Avery Morgan")
+  await page.getByRole("checkbox", { name: /I agree to sign electronically/ }).check()
   await page.getByRole("button", { name: "Submit signature" }).click()
 
   await expect(page.getByText(/your signature is recorded/i)).toBeVisible()

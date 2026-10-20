@@ -1,7 +1,7 @@
-import { z } from "zod"
+import * as z from "zod"
 
 /** Stable route identifiers; labels and order never change the destination. */
-export const NAVIGATION_HREFS = ["/dashboard", "/people", "/documents", "/templates", "/submissions", "/tasks", "/audit-log", "/settings"] as const
+export const NAVIGATION_HREFS = ["/dashboard", "/flow", "/people", "/documents", "/templates", "/submissions", "/tasks", "/audit-log", "/settings"] as const
 export const navigationHrefSchema = z.enum(NAVIGATION_HREFS)
 export const navigationLabelSchema = z.string().trim().min(1).max(40)
 export const navigationOrderSchema = z.array(navigationHrefSchema).max(NAVIGATION_HREFS.length)

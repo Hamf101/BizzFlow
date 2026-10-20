@@ -49,7 +49,7 @@ function TooltipContent({
       >
         <TooltipPrimitive.Popup
           className={cn(
-            "z-50 inline-flex w-fit max-w-xs origin-(--transform-origin) items-center rounded-[8px] bg-foreground px-2.5 py-1.5 text-xs font-medium text-background shadow-lg",
+            "z-50 inline-flex w-fit max-w-xs origin-(--transform-origin) items-center rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background shadow-lg",
             "transition-[scale,opacity] duration-100 ease-out data-ending-style:scale-[0.96] data-ending-style:opacity-0 data-starting-style:scale-[0.96] data-starting-style:opacity-0",
             className
           )}
@@ -57,7 +57,7 @@ function TooltipContent({
           {...props}
         >
           {children}
-          <TooltipPrimitive.Arrow className="size-2.5 rotate-45 rounded-[2px] bg-foreground fill-foreground data-[side=right]:-left-1" />
+          <TooltipPrimitive.Arrow className="size-2.5 rotate-45 rounded-xs bg-foreground fill-foreground data-[side=left]:-right-1 data-[side=right]:-left-1" />
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>
     </TooltipPrimitive.Portal>

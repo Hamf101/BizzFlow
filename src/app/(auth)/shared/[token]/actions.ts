@@ -53,7 +53,7 @@ function sharedDocument(token: string): InviteLink {
     findEmail: async () => (await getGuestInvite(token)).email,
     accept: async (user) => {
       const { documentId } = await acceptDocumentGuestInvite({ token, userEmail: user.email, userId: user.id })
-      return `/documents/${encodeURIComponent(documentId)}/preview`
+      return `/documents/${encodeURIComponent(documentId)}/edit`
     },
     explain: (error) =>
       error instanceof DocumentServiceError

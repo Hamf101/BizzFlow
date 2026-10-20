@@ -450,6 +450,33 @@ describe("recent documents", () => {
     ])
     expect((await list({ generatedBy: "user-1", limit: 5 })).map((document) => document.id)).toEqual(["mine-sent"])
   })
+
+  it("lists what the member opened, last opened first, whatever others changed since, and only what they may still open", async () => {
+    const opened = (document_id: string, last_opened_at: string, user_id = "user-1") => ({ document_id, last_opened_at, org_id: "org-1", user_id })
+    const client = new FakeSupabaseClient({
+      organization_memberships: [createMembershipRow("staff")],
+      documents: [
+        // Changed by someone else most recently, but never opened here.
+        createDocumentRow({ id: "busy", created_by: "user-2", updated_at: "2026-07-09T09:00:00.000Z" }),
+        createDocumentRow({ id: "opened-first", updated_at: "2026-07-01T09:00:00.000Z" }),
+        createDocumentRow({ id: "opened-last", updated_at: "2026-06-01T09:00:00.000Z" }),
+        createDocumentRow({ id: "access-revoked", created_by: "user-2", updated_at: "2026-07-01T09:00:00.000Z" }),
+        createDocumentRow({ id: "trashed", lifecycle_state: "trashed", updated_at: "2026-07-01T09:00:00.000Z" }),
+      ],
+      document_access_grants: [createDocumentGrant("busy")],
+      document_recent_accesses: [
+        opened("opened-first", "2026-07-02T09:00:00.000Z"),
+        opened("opened-last", "2026-07-05T09:00:00.000Z"),
+        opened("access-revoked", "2026-07-06T09:00:00.000Z"),
+        opened("trashed", "2026-07-07T09:00:00.000Z"),
+        opened("busy", "2026-07-08T09:00:00.000Z", "user-2"),
+      ],
+    })
+
+    const recent = await listRecentDocuments({ actorUserId: "user-1", openedBy: "user-1", organizationId: "org-1", limit: 5 }, createDeps(client))
+
+    expect(recent.map((document) => document.id)).toEqual(["opened-last", "opened-first"])
+  })
 })
 
 describe("folder creation beside a colleague's write", () => {

@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { z } from "zod"
+import * as z from "zod"
 
 import { AuthenticationError } from "@/lib/auth"
 import {
@@ -17,10 +17,12 @@ import {
   archiveDocumentTemplate,
   changeDocumentTemplates,
   createDocumentTemplate,
+  createFilledTemplateCopy,
   duplicateDocumentTemplate,
   getDocumentTemplate,
   getDocumentTemplateVersion,
   publishDocumentTemplate,
+  purgeTrashedDocumentTemplate,
   MAX_BULK_TEMPLATES,
   type TemplateBulkResult,
   TemplateServiceError,
@@ -29,6 +31,7 @@ import {
 import type { SaveResult } from "@/components/editor/use-autosave"
 import { withTemplateImageUrls } from "@/services/template-image-service"
 import { publishTemplateRoom } from "@/services/working-copy-service"
+import type { FlowFillResult } from "@/types/template-flow"
 import {
   createEmptyDocumentContent,
   parseTemplateContent,
@@ -43,15 +46,15 @@ const loadTemplateActionContext = (): ReturnType<typeof loadActionContext> =>
   loadActionContext(NO_ORGANIZATION)
 
 /**
- * Creates an initial draft template and opens its guided editor.
+ * Creates a draft template and opens its editor, ready to type.
  *
- * @param formData - New template title and optional description.
+ * @param formData - An optional title, description and category.
  * @returns Never returns; redirects to the new editor or a user-safe error.
  */
 export async function createTemplateAction(formData: FormData): Promise<void> {
   await runFormAction({
     event: "template_create_action",
-    path: "/templates/new",
+    path: "/templates",
     success: "template_created",
     run: async () => {
       const { actor, organization } = await loadTemplateActionContext()
@@ -66,7 +69,8 @@ export async function createTemplateAction(formData: FormData): Promise<void> {
       })
 
       revalidatePath("/templates")
-      return { path: `/templates/${template.id}/edit` }
+      // Opens with the cursor on its empty page (see TemplateEditor).
+      return { path: `/templates/${template.id}/edit?new=1` }
     },
   })
 }
@@ -216,6 +220,39 @@ export async function loadTemplateVersionAction(templateId: string, revision: nu
 }
 
 /**
+ * Makes a document of a template filled with the answers Flow read off the
+ * form it was recreated from.
+ *
+ * @param templateId - The template to copy.
+ * @param answers - The answers, keyed by field key; the service checks each.
+ * @returns The new document's editor and how many answers fit, or why not.
+ */
+export async function createFilledCopyAction(templateId: string, answers: unknown): Promise<FlowFillResult> {
+  try {
+    const { actor } = await loadTemplateActionContext()
+    const { documentId, dropped, kept } = await createFilledTemplateCopy({
+      ...actor,
+      answers,
+      templateId: requireFormId(templateId, "Template id"),
+    })
+
+    if (!documentId) {
+      return { dropped, kept, ok: true }
+    }
+
+    revalidatePath("/documents")
+    return { dropped, href: `/documents/${encodeURIComponent(documentId)}/edit`, kept, ok: true }
+  } catch (error: unknown) {
+    logTemplateActionFailure("template_filled_copy_failed", { reason: getUnknownErrorMessage(error), templateId })
+    return {
+      message:
+        error instanceof TemplateServiceError && error.statusCode !== 500 ? error.message : "The filled copy couldn't be made. Try again.",
+      ok: false,
+    }
+  }
+}
+
+/**
  * Archives a template so it no longer appears to staff for new documents.
  *
  * @param formData - Form containing the template identifier.
@@ -269,9 +306,38 @@ export async function duplicateTemplateAction(formData: FormData): Promise<void>
   })
 }
 
+/**
+ * Deletes a template in Trash for good, once its exact title is typed.
+ *
+ * @param formData - The template's id and the typed title.
+ * @returns Never returns; redirects back to Trash with how it went.
+ */
+export async function purgeTemplateAction(formData: FormData): Promise<void> {
+  const templateId = getFormString(formData, "templateId")
+
+  await runFormAction({
+    event: "template_purge_action",
+    // Someone answered it since it went to Trash: say so, rather than "refresh".
+    failure: (error) => (error instanceof TemplateServiceError && error.statusCode === 409 ? "template_has_answers" : undefined),
+    log: { templateId },
+    path: "/templates?status=trash",
+    success: "template_deleted",
+    run: async () => {
+      const { actor } = await loadTemplateActionContext()
+
+      await purgeTrashedDocumentTemplate({
+        ...actor,
+        confirmationTitle: getFormString(formData, "confirmationTitle"),
+        templateId: requireFormId(templateId, "Template id"),
+      })
+      revalidatePath("/templates")
+    },
+  })
+}
+
 const templateChangeSchema = z.object({
   category: z.string().nullable().optional(),
-  change: z.enum(["archive", "restore", "duplicate", "category"]),
+  change: z.enum(["archive", "restore", "trash", "duplicate", "category"]),
   templateIds: z.array(z.string().uuid()).min(1).max(MAX_BULK_TEMPLATES),
 })
 

@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import {
   canPerformOrganizationAction,
@@ -91,18 +91,15 @@ const PERMISSIONS: Record<WorkspaceSearchKind, OrganizationPermissionAction> = {
 // Across every section a few of each; in one section, a list's worth.
 const SHOWN_EACH = 4
 const SHOWN_ONE = 20
+// How far back one letter looks in what the member opened.
+const RECENT_FOR_A_LETTER = 50
 
 const inputSchema = z
   .object({
     kind: z.enum(WORKSPACE_SEARCH_KINDS).optional(),
-    query: z
-      .string()
-      .trim()
-      .max(100)
-      .refine((words) => words.length !== 1),
+    // From the first letter: the panel answers as soon as anything is typed.
+    query: z.string().trim().max(100),
   })
-  // Without words there is nothing to look for until a section is chosen.
-  .refine((input) => input.query !== "" || input.kind !== undefined)
 
 type Found = { hits: WorkspaceSearchHit[]; total: number }
 
@@ -117,9 +114,22 @@ function pick<T extends object, K extends keyof T>(value: T, keys: readonly K[])
 const FINDERS: Record<WorkspaceSearchKind, (actor: Actor, query: string, limit: number, deps: WorkspaceSearchDeps) => Promise<Found>> = {
   async files(actor, query, limit, deps) {
     if (!query) {
-      const recent = await (deps.listRecentFiles ?? listRecentDocuments)({ ...actor, limit })
+      const recent = await (deps.listRecentFiles ?? listRecentDocuments)({ ...actor, limit, openedBy: actor.actorUserId })
 
       return { hits: recent.map((document) => ({ item: pick(document, FIELDS.files), kind: "files" as const })), total: recent.length }
+    }
+
+    // One letter matches nearly the whole library, so it looks only through
+    // what the member opened lately, as a word processor's recent list does.
+    if (query.length === 1) {
+      const letter = query.toLocaleLowerCase()
+      const recent = (
+        await (deps.listRecentFiles ?? listRecentDocuments)({ ...actor, limit: RECENT_FOR_A_LETTER, openedBy: actor.actorUserId })
+      ).filter(
+        (document) => document.title.toLocaleLowerCase().includes(letter)
+      )
+
+      return { hits: recent.slice(0, limit).map((document) => ({ item: pick(document, FIELDS.files), kind: "files" as const })), total: recent.length }
     }
 
     // As the Files list searches: folders by name, then documents by title,
@@ -217,7 +227,7 @@ export async function searchWorkspace(
   const parsed = inputSchema.safeParse({ kind: input.kind ?? undefined, query: input.query ?? "" })
 
   if (!parsed.success) {
-    throw new WorkspaceSearchError("Search for 2 to 100 characters, or choose a section.", 400)
+    throw new WorkspaceSearchError("Search for up to 100 characters.", 400)
   }
 
   const { kind, query } = parsed.data
@@ -230,8 +240,9 @@ export async function searchWorkspace(
   }
 
   // Searching one section still counts the rest for their filters; without
-  // words, only the chosen section opens.
-  const looked = query ? kinds : kinds.filter((each) => each === kind)
+  // words, only the chosen section opens, or, with none chosen, what each
+  // section had lately. People have no "lately", so they wait for words.
+  const looked = query ? kinds : kinds.filter((each) => (kind === undefined ? each !== "people" : each === kind))
 
   // A user with no permissions for any section has nothing to search.
   if (looked.length === 0) {

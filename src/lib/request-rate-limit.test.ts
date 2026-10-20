@@ -46,7 +46,6 @@ describe("limitRequestByIp", () => {
 
 describe("limitRequestByMember", () => {
   it.each([
-    ["an API read such as search", "/api/search?q=a", "GET"],
     ["an API call such as a file download link", "/api/documents/d-1/download-url", "POST"],
     ["a server action, which posts to a page", "/templates", "POST"],
   ])("spends the member's budget on %s", async (_name, path, method) => {
@@ -63,6 +62,14 @@ describe("limitRequestByMember", () => {
     expect(check).not.toHaveBeenCalled()
   })
 
+  it("holds search, which asks from the first letter typed, to a budget of its own", async () => {
+    const check = vi.fn<CheckRateLimit>().mockResolvedValue()
+
+    await limitRequestByMember(request("/api/search?q=a"), "user-1", { check })
+
+    expect(check).toHaveBeenCalledExactlyOnceWith("member_search", "user-1")
+  })
+
   it("holds a CSV export to its own, smaller budget instead", async () => {
     const check = vi.fn<CheckRateLimit>().mockResolvedValue()
 
@@ -73,7 +80,7 @@ describe("limitRequestByMember", () => {
 
   it("answers 429 with a retry hint once the member is over budget", async () => {
     const response = await limitRequestByMember(request("/api/search?q=a"), "user-1", {
-      check: denying("member_request"),
+      check: denying("member_search"),
     })
 
     expect(response?.status).toBe(429)

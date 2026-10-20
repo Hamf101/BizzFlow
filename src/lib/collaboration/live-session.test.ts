@@ -14,7 +14,7 @@ import {
 import type { TemplateBlock } from "@/types/template"
 import { updateTemplateBlock } from "@/types/template-structure"
 
-import { type LiveSession, RoomRefusal, type RoomTransport, startLiveSession } from "./live-session"
+import { type LiveSession, RoomRefusal, type RoomTransport, startLiveSession, type UnsentStore } from "./live-session"
 import type { WorkingCopy } from "./working-copy-doc"
 
 /** A room served by the real service over an in-memory database, and the editors in it. */
@@ -50,9 +50,9 @@ function room() {
     }
   }
 
-  async function join(actorUserId: string, onRefused?: (message: string) => void): Promise<LiveSession<WorkingCopy>> {
+  async function join(actorUserId: string, onRefused?: (message: string) => void, unsent?: UnsentStore): Promise<LiveSession<WorkingCopy>> {
     const opened = await openWorkingCopyRoom(as(actorUserId), deps)
-    const editor = startLiveSession<WorkingCopy>({ fromCopy: (copy) => copy, onRefused, opened, toCopy: (copy) => copy, transport: transport(actorUserId) })
+    const editor = startLiveSession<WorkingCopy>({ fromCopy: (copy) => copy, onRefused, opened, toCopy: (copy) => copy, transport: transport(actorUserId), unsent })
     editors.push(editor)
     return editor
   }
@@ -78,6 +78,43 @@ const relabel = (label: string) => (copy: WorkingCopy): WorkingCopy => {
 }
 const intro = (copy: WorkingCopy): unknown => copy.content.blocks[0] && "text" in copy.content.blocks[0] ? copy.content.blocks[0].text : null
 const label = (copy: WorkingCopy): unknown => (copy.content.blocks[1] as { label?: string }).label
+
+// What a browser keeps between visits: the changes not yet kept, per room.
+function memoryStore(): UnsentStore & { held: Uint8Array[] } {
+  const store = {
+    held: [] as Uint8Array[],
+    load: async () => store.held,
+    save: async (updates: readonly Uint8Array[]) => {
+      store.held = [...updates]
+    },
+  }
+  return store
+}
+
+describe("changes made offline", () => {
+  it("keeps what was not sent when the page closes, and sends it when the document opens again", async () => {
+    const { join, setOffline, settle } = room()
+    const device = memoryStore()
+
+    setOffline(true)
+    const before = await join(MANAGER_ID, undefined, device)
+    before.change(retypeIntro("Written on the train"))
+    await before.flush()
+    expect(before.status()).toBe("offline")
+    expect(device.held.length).toBeGreaterThan(0)
+    // The tab closes before the connection comes back.
+    before.stop()
+
+    setOffline(false)
+    const after = await join(MANAGER_ID, undefined, device)
+    await settle()
+
+    expect(intro(after.snapshot())).toBe("Written on the train")
+    expect(device.held).toEqual([])
+    const reader = await join(OWNER_ID)
+    expect(intro(reader.snapshot())).toBe("Written on the train")
+  })
+})
 
 describe("live editing", () => {
   afterEach(() => {

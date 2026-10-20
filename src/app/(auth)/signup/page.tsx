@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 
 import { NewPasswordFields } from "@/components/auth/new-password-fields"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { buildAcceptInvitePath } from "@/lib/auth-redirects"
@@ -40,7 +40,7 @@ export default async function SignupPage({
           <>
             <span className="text-sm text-muted-foreground">Wrong address?</span>
             <Link
-              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              className="-my-3 inline-block py-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
               href="/signup"
             >
               Sign up again
@@ -61,7 +61,7 @@ export default async function SignupPage({
             Already have an account?
           </span>
           <Link
-            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+            className="-my-3 inline-block py-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
             href="/login"
           >
             Log in
@@ -91,9 +91,9 @@ export default async function SignupPage({
           </Field>
           <NewPasswordFields />
         </FieldGroup>
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full" pendingText="Signing up…">
           Sign up
-        </Button>
+        </SubmitButton>
       </form>
     </AuthPageCard>
   )

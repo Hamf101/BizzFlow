@@ -364,6 +364,35 @@ describe("listTasks", () => {
   })
 })
 
+describe("tasks for a role narrowed to a branch", () => {
+  it("lists and opens only the tasks of the people it sees", async () => {
+    const theirs = "30000000-0000-4000-8000-000000000002"
+    const client = createClient([
+      createTaskRow({ assigned_to: STAFF_ID, assigned_by: OWNER_ID, assigned_at: CREATED_AT, created_by: OWNER_ID }),
+      createTaskRow({ id: theirs, assigned_to: REVIEWER_ID, assigned_by: OWNER_ID, assigned_at: CREATED_AT, created_by: OWNER_ID }),
+    ])
+    client.reach[MANAGER_ID] = { everyone: false, supervised: [], visible: [MANAGER_ID, STAFF_ID] }
+    const actor = { actorUserId: MANAGER_ID, organizationId: ORG_ID }
+
+    const page = await listTaskPage({ ...actor, page: 1, pageSize: 10, sort: { direction: "asc", key: "due" } }, createDeps(client))
+
+    expect(page.tasks.map((task) => task.id)).toEqual([TASK_ID])
+    await expect(getTask({ ...actor, taskId: theirs }, createDeps(client))).rejects.toMatchObject({ statusCode: 404 })
+    await expect(getTask({ ...actor, taskId: TASK_ID }, createDeps(client))).resolves.toMatchObject({ task: { id: TASK_ID } })
+  })
+  it("cannot change a task it no longer sees", async () => {
+    const theirs = "30000000-0000-4000-8000-000000000002"
+    const client = createClient([createTaskRow({ id: theirs, assigned_to: REVIEWER_ID, assigned_by: OWNER_ID, assigned_at: CREATED_AT, created_by: OWNER_ID })])
+    client.reach[MANAGER_ID] = { everyone: false, supervised: [], visible: [MANAGER_ID, STAFF_ID] }
+    const target = { actorUserId: MANAGER_ID, organizationId: ORG_ID, taskId: theirs, expectedRevision: 1 }
+
+    await expect(updateTask({ ...target, title: "Taken over" }, createDeps(client))).rejects.toMatchObject({ statusCode: 404 })
+    await expect(assignTask({ ...target, assignedTo: MANAGER_ID }, createDeps(client))).rejects.toMatchObject({ statusCode: 404 })
+    await expect(transitionTaskStatus({ ...target, targetStatus: "in_progress" }, createDeps(client))).rejects.toMatchObject({ statusCode: 404 })
+    expect(client.tables.tasks[0]).toMatchObject({ title: expect.not.stringContaining("Taken over"), assigned_to: REVIEWER_ID, revision: 1 })
+  })
+})
+
 describe("listTaskPage", () => {
   const FOURTH_TASK_ID = "30000000-0000-4000-8000-000000000004"
   const DUE_SOONEST = { direction: "asc", key: "due" } as const

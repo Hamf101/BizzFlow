@@ -95,6 +95,7 @@ describe("submission persistence types", () => {
       assignedAt: null,
       requiredApprovals: null,
       sentTo: null,
+      fromPublicLink: false,
     })
   })
 
@@ -348,27 +349,18 @@ describe("submission persistence types", () => {
 })
 
 describe("submission status badges", () => {
+  // Each status's look is covered by submission-status-badge.test.tsx: no two alike.
   it.each([
-    { status: "draft", label: "Draft", variant: "secondary" },
-    { status: "submitted", label: "Submitted", variant: "default" },
-    { status: "in_review", label: "In review", variant: "outline" },
-    {
-      status: "needs_changes",
-      label: "Needs changes",
-      variant: "destructive",
-    },
-    { status: "approved", label: "Approved", variant: "default" },
-    { status: "rejected", label: "Rejected", variant: "destructive" },
-    { status: "completed", label: "Completed", variant: "secondary" },
-  ] as const satisfies ReadonlyArray<{
-    status: SubmissionStatus
-    label: string
-    variant: string
-  }>)("renders $status as $label", ({ status, label, variant }) => {
+    { status: "draft", label: "Draft" },
+    { status: "submitted", label: "Submitted" },
+    { status: "in_review", label: "In review" },
+    { status: "needs_changes", label: "Needs changes" },
+    { status: "approved", label: "Approved" },
+    { status: "rejected", label: "Rejected" },
+    { status: "completed", label: "Completed" },
+  ] as const satisfies ReadonlyArray<{ status: SubmissionStatus; label: string }>)("renders $status as $label", ({ status, label }) => {
     const badge = SubmissionStatusBadge({ status })
-    const props = badge.props as { children: string; variant: string }
 
-    expect(props.children).toBe(label)
-    expect(props.variant).toBe(variant)
+    expect((badge.props as { children: string }).children).toBe(label)
   })
 })

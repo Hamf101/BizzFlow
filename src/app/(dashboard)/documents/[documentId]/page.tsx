@@ -35,6 +35,7 @@ import {
   type DocumentDetail,
   type DocumentLifecycleState,
   isViewableDocumentType,
+  opensInEditor,
 } from "@/types/document"
 import type { OrganizationContext } from "@/types/organization"
 
@@ -117,11 +118,8 @@ export default async function DocumentDetailPage({
     )
   }
 
-  if (
-    detail.document.sourceKind === "generated" &&
-    (detail.document.lifecycleState === "active" || detail.document.lifecycleState === "archived")
-  ) {
-    redirect(`/documents/${encodeURIComponent(detail.document.id)}/preview`)
+  if (opensInEditor(detail.document)) {
+    redirect(`/documents/${encodeURIComponent(detail.document.id)}/edit`)
   }
 
   const isCollaborationReadable =

@@ -8,9 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
-import { maxMargin, paragraphGap, resizeTemplateLayout, resolvePageGeometry } from "@/services/templates/template-render-plan"
-import type { TemplateLayout } from "@/types/template"
+import { fitMargins, marginSizeOf, maxMargin, paragraphGap, resizeTemplateLayout, resolvePageGeometry } from "@/services/templates/template-render-plan"
+import { MARGIN_SIZES, type MarginSize, type TemplateLayout } from "@/types/template"
 import { applyDocumentStyle, type DocumentStyle, documentStyleOf } from "@/types/template-styles"
+
+import { setMarginText } from "./margin-text-band"
 
 // A whole look at once; a page changed by hand afterwards is in a style of its own.
 const STYLES: ReadonlyArray<readonly [DocumentStyle, string]> = [
@@ -101,14 +103,14 @@ export function PageSetupPanel({
       />
       <Choice
         label="Margins"
-        onChange={(marginPreset) => onChange({ ...layout, marginPreset, margins: undefined })}
+        onChange={(size: MarginSize) => onChange({ ...layout, margins: fitMargins(geometry, MARGIN_SIZES[size]) })}
         options={[
-          ["compact", "Narrow"],
-          ["standard", "Normal"],
-          ["generous", "Wide"],
+          ["narrow", "Narrow"],
+          ["normal", "Normal"],
+          ["wide", "Wide"],
         ]}
-        // Margins set side by side match no preset.
-        value={layout.margins ? null : layout.marginPreset}
+        // Margins set side by side match no size.
+        value={marginSizeOf(geometry.margins)}
       />
       <div className="grid grid-cols-2 gap-x-3 gap-y-2">
         {MARGIN_SIDES.map(([side, label]) => (
@@ -171,8 +173,10 @@ export function PageSetupPanel({
         onChange={(sectionNumbers) => onChange({ ...layout, sectionNumbers: sectionNumbers === "none" ? undefined : sectionNumbers })}
         options={[
           ["none", "None"],
-          ["letters", "A, B, C"],
-          ["numbers", "1, 2, 3"],
+          // Each as it prints; 1.1 numbers sections 1, 2 and their numbered lists 1.1, 1.2, as a contract's clauses.
+          ["letters", "A."],
+          ["numbers", "1."],
+          ["clauses", "1.1"],
         ]}
         value={layout.sectionNumbers ?? "none"}
       />
@@ -227,25 +231,6 @@ export function PageSetupPanel({
   )
 }
 
-// An emptied slot is removed, and a margin with none left drops its text.
-// Words written in a margin that is off turn it on, so they show.
-function setMarginText(
-  layout: TemplateLayout,
-  key: "headerText" | "footerText",
-  slot: "left" | "center" | "right",
-  value: string
-): TemplateLayout {
-  const text = Object.fromEntries(Object.entries({ ...layout[key], [slot]: value }).filter(([, words]) => words?.trim()))
-  const policy = key === "headerText" ? "headerPolicy" : "footerPolicy"
-  const written = Object.keys(text).length > 0
-
-  return {
-    ...layout,
-    [key]: written ? text : undefined,
-    [policy]: written && layout[policy] === "none" ? "all_pages" : layout[policy],
-  }
-}
-
 function Row({ children, label }: { children: ReactNode; label: string }): ReactElement {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -284,7 +269,7 @@ function Points({
       step={step}
       value={value}
     >
-      <NumberField.Group className="flex h-8 w-20 items-center rounded-[8px] border border-input bg-card text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
+      <NumberField.Group className="flex h-8 w-20 items-center rounded-md border border-input bg-card text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
         <NumberField.Input aria-label={label} className="min-w-0 flex-1 bg-transparent pl-2 text-[13px] tabular-nums outline-none" />
         {unit ? <span className="pr-2 text-xs text-muted-foreground">{unit}</span> : null}
       </NumberField.Group>
@@ -305,12 +290,12 @@ function Choice<Value extends string>({
 }): ReactElement {
   return (
     <Row label={label}>
-      <div aria-label={label} className="inline-flex rounded-[10px] bg-muted p-0.5" role="radiogroup">
+      <div aria-label={label} className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup">
         {options.map(([option, text]) => (
           <button
             aria-checked={option === value}
             className={cn(
-              "h-8 rounded-[8px] px-2.5 text-[13px] text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+              "h-8 rounded-md px-2.5 text-[13px] whitespace-nowrap text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
               option === value && "bg-card text-foreground shadow-sm"
             )}
             key={option}

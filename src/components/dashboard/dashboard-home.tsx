@@ -46,7 +46,7 @@ export function DashboardHome({
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
       <Block count={queue.length} title="Waiting on you">
-        <div className="overflow-hidden rounded-[14px] border border-border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
           {queue.length === 0 ? (
             <p className="px-4 py-6 text-sm text-muted-foreground">
               {degraded ? "Some of this didn't load." : "Nothing is waiting on you."}
@@ -68,7 +68,7 @@ export function DashboardHome({
             {dueThisWeek.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nothing is due this week.</p>
             ) : (
-              <ul className="divide-y divide-border overflow-hidden rounded-[14px] border border-border bg-card">
+              <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
                 {dueThisWeek.slice(0, 5).map((task: DueTask) => (
                   <li key={task.id}>
                     <Link
@@ -209,11 +209,13 @@ function Workflow({ workflow }: { workflow: WorkflowSummary }): ReactElement {
           </li>
         ))}
       </ul>
-      <ul className="flex gap-2 overflow-x-auto pb-0.5 md:hidden">
+      {/* Tiles past the edge fade out, which says the row scrolls; the room at
+          its end lets the last one scroll clear of the fade. */}
+      <ul className="-mr-1 flex gap-2 overflow-x-auto pr-7 pb-0.5 [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
         {stages.map((stage) => (
           <li className="flex-none" key={stage.status}>
             <Link
-              className="grid min-w-[86px] rounded-[12px] border border-border bg-card px-2.5 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="grid min-w-[86px] rounded-lg border border-border bg-card px-2.5 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               href={`/submissions?status=${stage.filter}`}
             >
               <span

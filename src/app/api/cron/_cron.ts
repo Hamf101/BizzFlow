@@ -2,6 +2,8 @@ import { timingSafeEqual } from "node:crypto"
 
 import { NextResponse } from "next/server"
 
+import { monitorCron } from "@/lib/observability"
+
 /**
  * A JSON response no browser, proxy, or CDN keeps.
  *
@@ -56,4 +58,35 @@ export function refuseCronRequest(
   }
 
   return null
+}
+
+/**
+ * Runs a cron route's work inside its heartbeat: a run that answers 500 is
+ * reported to the monitor as failed, and still answers with its own response.
+ *
+ * @param slug - The monitor's stable name.
+ * @param schedule - The route's crontab in vercel.json, in UTC.
+ * @param work - The route's work after its request was accepted.
+ * @returns The work's response.
+ */
+export async function monitoredCronResponse(slug: string, schedule: string, work: () => Promise<Response>): Promise<Response> {
+  let response: Response | undefined
+
+  try {
+    return await monitorCron(slug, schedule, async () => {
+      response = await work()
+
+      if (response.status >= 500) {
+        throw new Error(`${slug} failed`)
+      }
+
+      return response
+    })
+  } catch (error: unknown) {
+    if (response) {
+      return response
+    }
+
+    throw error
+  }
 }

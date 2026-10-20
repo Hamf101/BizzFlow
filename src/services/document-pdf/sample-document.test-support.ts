@@ -31,7 +31,10 @@ const SAMPLE_INITIALS_DATA_URL =
  * @returns Template content covering every block type the renderer supports.
  */
 export function createSampleDocumentContent(): TemplateContent {
-  const content = createBlankTemplateContent()
+  const blank = createBlankTemplateContent()
+  // Held at the 40-point preset content was made with before new paper took
+  // an inch, which is what the sample's measurements and fingerprints are of.
+  const content = { ...blank, layout: { ...blank.layout, margins: undefined } }
   const detailParagraphs: ParagraphBlock[] = Array.from(
     { length: 18 },
     (_value: unknown, index: number): ParagraphBlock => ({
@@ -239,6 +242,8 @@ export function createSampleDocumentInput(
         requiresSignature: true,
         status: "signed",
         signedAt: "2026-07-17T18:30:00.000Z",
+        consentedAt: "2026-07-17T18:29:00.000Z",
+        signedIp: "203.0.113.7",
         signatureDataUrl: SAMPLE_SIGNATURE_DATA_URL,
         initialsDataUrl: SAMPLE_INITIALS_DATA_URL
       },

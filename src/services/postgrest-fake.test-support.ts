@@ -83,9 +83,13 @@ export class PostgrestReadQuery implements PromiseLike<PostgrestFakeResult> {
     return this.where((row: FakeRow): boolean => values.includes(row[column]))
   }
 
-  // Only `not(column, "in", "(a,b)")` is stood in for.
-  not(column: string, operator: string, value: string): this {
-    const excluded = operator === "in" ? value.slice(1, -1).split(",") : []
+  // Only `not(column, "in", "(a,b)")` and `not(column, "is", null)` are stood in for.
+  not(column: string, operator: string, value: string | null): this {
+    if (operator === "is" && value === null) {
+      return this.where((row: FakeRow): boolean => (row[column] ?? null) !== null)
+    }
+
+    const excluded = operator === "in" ? (value ?? "()").slice(1, -1).split(",") : []
 
     return this.where((row: FakeRow): boolean => !excluded.includes(String(row[column])))
   }
@@ -124,8 +128,7 @@ export class PostgrestReadQuery implements PromiseLike<PostgrestFakeResult> {
    * are supported, which is all the services send.
    */
   or(clauses: string): this {
-    // Commas inside a list, as in id.in.(a,b), belong to that clause.
-    const tests = (clauses.match(/[^,(]+(?:\([^)]*\))?/g) ?? []).map(parseOrClause)
+    const tests = splitTopLevel(clauses).map(parseOrClause)
 
     return this.where((row: FakeRow): boolean =>
       tests.some((test: RowFilter): boolean => test(row))
@@ -417,7 +420,32 @@ function compareOrdered(left: unknown, right: unknown, order: FakeOrder): number
   return order.ascending ? comparison : -comparison
 }
 
+// Commas inside a list, as in id.in.(a,b), or a group, as in and(x,y), belong to it.
+function splitTopLevel(clauses: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let start = 0
+
+  for (let index = 0; index < clauses.length; index += 1) {
+    const character = clauses[index]
+    depth += character === "(" ? 1 : character === ")" ? -1 : 0
+
+    if (character === "," && depth === 0) {
+      parts.push(clauses.slice(start, index))
+      start = index + 1
+    }
+  }
+
+  return [...parts, clauses.slice(start)].filter(Boolean)
+}
+
 function parseOrClause(clause: string): RowFilter {
+  // As PostgREST: and(a,b) inside an or holds when every part does.
+  if (clause.startsWith("and(") && clause.endsWith(")")) {
+    const all = splitTopLevel(clause.slice(4, -1)).map(parseOrClause)
+    return (row: FakeRow): boolean => all.every((test: RowFilter): boolean => test(row))
+  }
+
   const [column = "", operator = "", ...rest] = clause.split(".")
   const value = rest.join(".")
   const text = (row: FakeRow): string | null =>

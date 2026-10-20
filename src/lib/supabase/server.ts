@@ -4,8 +4,10 @@ import { cookies } from "next/headers"
 import { getPublicSupabaseEnv } from "@/lib/env"
 
 export async function createClient(): Promise<ReturnType<typeof createServerClient>> {
-  const env = getPublicSupabaseEnv()
+  // Cookies first: it makes any page that signs someone in render per
+  // request, so a build never needs the settings read below.
   const cookieStore = await cookies()
+  const env = getPublicSupabaseEnv()
 
   return createServerClient(
     env.SUPABASE_URL,

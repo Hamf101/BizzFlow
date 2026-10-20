@@ -1,8 +1,9 @@
 import { Plus } from "lucide-react"
 import Link from "next/link"
-import type { CSSProperties, ReactElement } from "react"
+import type { CSSProperties, ReactElement, ReactNode } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
+import { PhoneSelectButton } from "@/components/data/selection"
 import { ListPagination } from "@/components/data/list-pagination"
 import { ListQuery } from "@/components/data/list-query"
 import { ListEmpty, ListHeading } from "@/components/data/list-heading"
@@ -19,6 +20,7 @@ import {
   SubmissionProgress,
   SubmissionStatusMark,
 } from "@/components/submissions/submission-progress"
+import { SelectableSubmissionRow, SubmissionRowMenu, SubmissionSelection, SubmissionSelectionBar } from "@/components/submissions/submission-selection"
 import { SubmissionTitlePreview } from "@/components/submissions/submission-title-preview"
 import { LocalDate } from "@/components/ui/local-date"
 import { buttonVariants } from "@/components/ui/button"
@@ -51,6 +53,7 @@ const ROW_STAGGER_MS = 25
 export function SubmissionsWorkspace({
   canAssign,
   canCreate,
+  canReview = false,
   currentUserId,
   members,
   organizationId,
@@ -61,6 +64,8 @@ export function SubmissionsWorkspace({
 }: {
   canAssign: boolean
   canCreate: boolean
+  /** May start and approve reviews, so may select several at once. */
+  canReview?: boolean
   currentUserId: string
   members: OrganizationMember[]
   organizationId: string
@@ -94,7 +99,7 @@ export function SubmissionsWorkspace({
             <Link
               className={cn(
                 buttonVariants(),
-                "h-11 rounded-[12px] px-4 font-normal"
+                "h-11 rounded-lg px-4 font-normal"
               )}
               href="/submissions/new"
             >
@@ -125,6 +130,7 @@ export function SubmissionsWorkspace({
             : "No submissions yet."}
         </ListEmpty>
       ) : (
+        <ReviewSelection canReview={canReview} submissions={submissions}>
         <div
           aria-label="Submissions"
           className="flex flex-col gap-1"
@@ -133,7 +139,7 @@ export function SubmissionsWorkspace({
         >
           <div
             className={cn(
-              "hidden gap-4 px-3 py-2 text-[11px] font-normal tracking-[0.08em] text-muted-foreground uppercase lg:grid",
+              "hidden gap-4 px-3 py-2 text-xs font-normal text-muted-foreground lg:grid",
               grid
             )}
             role="row"
@@ -152,6 +158,7 @@ export function SubmissionsWorkspace({
           {submissions.map((submission: Submission, index: number) => (
             <SubmissionRow
               canAssign={canAssign}
+              canReview={canReview}
               currentUserId={currentUserId}
               grid={grid}
               index={index}
@@ -162,6 +169,7 @@ export function SubmissionsWorkspace({
             />
           ))}
         </div>
+        </ReviewSelection>
       )}
 
       <ListPagination
@@ -176,6 +184,7 @@ export function SubmissionsWorkspace({
 
 function SubmissionRow({
   canAssign,
+  canReview,
   currentUserId,
   grid,
   index,
@@ -184,6 +193,7 @@ function SubmissionRow({
   submission,
 }: {
   canAssign: boolean
+  canReview: boolean
   currentUserId: string
   grid: string
   index: number
@@ -196,13 +206,16 @@ function SubmissionRow({
     "--row-delay": `${Math.min(index, MAX_STAGGERED_ROWS) * ROW_STAGGER_MS}ms`,
   } as CSSProperties
 
+  // Only a reviewer's rows select; anyone else's keep the browser's own menu.
+  const Row = canReview ? SelectableSubmissionRow : PlainRow
+
   return (
-    <div
+    <Row
       className={cn(
-        "grid min-h-14 grid-cols-[minmax(0,1fr)_6rem] items-center gap-3 rounded-[12px] px-1 py-2 transition-[background-color,translate] duration-200 hover:bg-card/65 data-[previewing=true]:bg-card/65 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--row-delay)] motion-safe:hover:-translate-y-px lg:gap-4 lg:px-3",
+        "relative grid min-h-14 grid-cols-[minmax(0,1fr)_6rem] items-center gap-3 rounded-lg px-1 py-2 transition-[background-color,translate] duration-200 hover:bg-card/65 data-[previewing=true]:bg-card/65 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--row-delay)] motion-safe:hover:-translate-y-px lg:gap-4 lg:px-3",
         grid
       )}
-      data-slot="submission-row"
+      itemId={submission.id}
       role="row"
       style={riseDelay}
     >
@@ -215,9 +228,9 @@ function SubmissionRow({
             submissionId={submission.id}
             title={submission.title}
           />
-          {submission.sentTo ? (
-            <span className="truncate text-xs text-muted-foreground" data-slot="submission-sent-to">
-              Sent to {submission.sentTo}
+          {submission.sentTo || submission.fromPublicLink ? (
+            <span className="truncate text-xs text-muted-foreground" data-slot="submission-source">
+              {submission.sentTo ? `Sent to ${submission.sentTo}` : "From a public link"}
             </span>
           ) : null}
           <span
@@ -251,7 +264,8 @@ function SubmissionRow({
       >
         {updated}
       </span>
-    </div>
+      {canReview ? <SubmissionRowMenu /> : null}
+    </Row>
   )
 }
 
@@ -279,5 +293,28 @@ function AssigneeInitials({
       )}
       data-initials={member ? getInitials(member.fullName, member.email) : ""}
     />
+  )
+}
+
+// A reviewer can select several to start or approve at once; others see a plain list.
+function ReviewSelection({ canReview, children, submissions }: { canReview: boolean; children: ReactElement; submissions: Submission[] }): ReactElement {
+  if (!canReview) {
+    return children
+  }
+
+  return (
+    <SubmissionSelection submissions={submissions.map(({ id, revision, status }) => ({ id, revision, status }))}>
+      <PhoneSelectButton />
+      {children}
+      <SubmissionSelectionBar />
+    </SubmissionSelection>
+  )
+}
+
+function PlainRow({ children, className, role, style }: { children: ReactNode; className: string; itemId: string; role: string; style: CSSProperties }): ReactElement {
+  return (
+    <div className={className} data-slot="submission-row" role={role} style={style}>
+      {children}
+    </div>
   )
 }

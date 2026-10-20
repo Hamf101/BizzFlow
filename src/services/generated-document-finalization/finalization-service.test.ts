@@ -38,13 +38,17 @@ describe("generated document finalization service", () => {
     const persistence = createPersistence()
     const storage = createStorage()
 
+    const sendSignedCopies = vi.fn(async () => 2)
+
     await finalizeCompletedGeneratedDocument(
       { id: DOCUMENT_ID, organizationId: ORGANIZATION_ID, createdBy: ACTOR_ID },
-      { persistence, storage, loadSigningView: async () => createSigningView("completed"), renderPdf: async () => PDF, createId: () => FINALIZATION_ID }
+      { persistence, storage, loadSigningView: async () => createSigningView("completed"), renderPdf: async () => PDF, createId: () => FINALIZATION_ID, sendSignedCopies }
     )
 
     expect(persistence.prepare).toHaveBeenCalledWith(expect.objectContaining({ createdBy: ACTOR_ID }))
     expect(storage.store).toHaveBeenCalledOnce()
+    // Only once the paper is stored does anyone get a link to it.
+    expect(sendSignedCopies).toHaveBeenCalledWith({ organizationId: ORGANIZATION_ID, documentId: DOCUMENT_ID })
 
     const pending = createPersistence({ existing: createFinalizationRecord() })
     await expect(findFinalizedGeneratedDocumentVersionId(input, { persistence: pending })).resolves.toBeNull()
@@ -463,7 +467,7 @@ function createSigningView(
         viewedAt: "2026-07-18T04:15:00.000Z",
         signedAt: "2026-07-18T04:30:00.000Z",
         signatureDataUrl: null,
-        initialsDataUrl: null,
+        initialsDataUrl: null, consentedAt: null, signedIp: null,
       },
       {
         id: "70000000-0000-4000-8000-000000000001",
@@ -479,7 +483,7 @@ function createSigningView(
         viewedAt: "2026-07-18T03:15:00.000Z",
         signedAt: "2026-07-18T03:30:00.000Z",
         signatureDataUrl: null,
-        initialsDataUrl: null,
+        initialsDataUrl: null, consentedAt: null, signedIp: null,
       },
     ],
   }

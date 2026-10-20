@@ -1,3 +1,4 @@
+import { loadMemberReach } from "@/services/member-reach"
 import { randomUUID } from "node:crypto"
 
 import {
@@ -18,7 +19,7 @@ import {
 } from "@/services/submissions/validation"
 import {
   parseSubmissionFileRow,
-  parseSubmissionRow,
+  parseSubmissionRow as parseStoredSubmissionRow,
   SubmissionDomainError,
   type Submission,
   type SubmissionAnswers,
@@ -29,6 +30,8 @@ import { SubmissionReviewDomainError } from "@/types/submission-review"
 import { requireOrgPermission } from "@/services/organizations/active-membership"
 import { runOperation } from "@/services/operation"
 import { asSupabaseError } from "@/services/supabase-error"
+import { calculateTemplateAnswers } from "@/types/template-calculation"
+import { calculatedFieldKeys } from "@/types/template-formula"
 
 /** Columns required by the canonical submission row parser. */
 export const SUBMISSION_COLUMNS =
@@ -186,13 +189,25 @@ export async function assertSubmissionVisible(
   submission: Submission,
   actorUserId: string
 ): Promise<void> {
-  // Staff see their own work and what was shared with them.
+  // Staff see their own work, what was shared with them, and what the people
+  // they lead or manage submitted.
   if (
     role === "staff" &&
     submission.createdBy !== actorUserId &&
-    (submission.status === "draft" || !(await isSubmissionReviewer(client, submission, actorUserId)))
+    (submission.status === "draft" ||
+      (!(await isSubmissionReviewer(client, submission, actorUserId)) &&
+        !(await loadMemberReach(client, submission.organizationId, actorUserId)).supervised.includes(submission.createdBy ?? "")))
   ) {
     throw new SubmissionServiceError("Submission was not found.", 404)
+  }
+
+  // A role narrowed to a branch sees work from the people it sees, and what it reviews.
+  if (role !== "staff" && role !== "external_reviewer" && role !== "owner_admin") {
+    const { visible } = await loadMemberReach(client, submission.organizationId, actorUserId)
+
+    if (visible && !visible.includes(submission.createdBy ?? "") && !(await isSubmissionReviewer(client, submission, actorUserId))) {
+      throw new SubmissionServiceError("Submission was not found.", 404)
+    }
   }
 
   // An external reviewer sees a submitted piece of work only when they review it or it was shared with them.
@@ -473,4 +488,32 @@ function getKnownMutationMessage(message: string | undefined): string | null {
   )
     ? message
     : null
+}
+
+/**
+ * Parses a stored submission with every worked-out answer worked out afresh
+ * from its answers, so one accepted suggestion, which the database writes on
+ * its own, still shows the totals that follow from it.
+ *
+ * @param value - Untrusted persistence data.
+ * @returns The submission.
+ * @throws SubmissionDomainError when the row violates the persistence contract.
+ */
+export function parseSubmissionRow(value: unknown): Submission {
+  const submission = parseStoredSubmissionRow(value)
+  const keys = calculatedFieldKeys(submission.templateSnapshot.blocks)
+
+  if (keys.length === 0) {
+    return submission
+  }
+
+  const calculated = calculateTemplateAnswers(submission.templateSnapshot, submission.values)
+
+  return {
+    ...submission,
+    values: {
+      ...submission.values,
+      ...(Object.fromEntries(keys.flatMap((key) => (calculated[key] === undefined ? [] : [[key, calculated[key]]]))) as Submission["values"]),
+    },
+  }
 }

@@ -156,7 +156,7 @@ export function PublicAnswerPaper({
           documentTitle={title}
           fields="fill"
           narrow={narrow}
-          onAnswerChange={(fieldKey, value) => setAnswers((current) => applyVisibleTemplateFieldValue(content, current, fieldKey, value))}
+          onAnswerChange={(fieldKey, value, settle) => setAnswers((current) => applyVisibleTemplateFieldValue(content, current, fieldKey, value, settle))}
           renderFileField={(block) => (
             <PublicSubmissionFileField
               answers={answers}

@@ -179,10 +179,10 @@ export function PeopleWorkspace({
 
         {getOrganizationRoleFromSubject(actorRole) === "owner_admin" ? (
           <Link
-            className="mt-auto mb-12 w-fit whitespace-nowrap text-sm font-normal text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35 md:mb-0"
+            className="mt-auto mb-12 inline-flex min-h-11 w-fit items-center whitespace-nowrap text-sm font-normal text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35 md:mb-0"
             href="/settings#roles-and-access"
           >
-            Edit roles and access →
+            Edit roles and access
           </Link>
         ) : null}
       </section>
@@ -233,7 +233,7 @@ function RoleFilters({
       </div>
       <Select
         aria-label="Filter people by role"
-        className="h-10 w-fit min-w-40 rounded-[10px] bg-secondary/55 font-normal md:hidden"
+        className="h-10 w-fit min-w-40 rounded-lg bg-secondary/55 font-normal md:hidden"
         data-slot="mobile-role-filter"
         onChange={(event) => onChange(event.target.value)}
         value={activeFilter}
@@ -272,7 +272,7 @@ function MemberDirectory({
       role="table"
     >
       <div
-        className="hidden grid-cols-[minmax(16rem,1.5fr)_minmax(9rem,.75fr)_minmax(8rem,.65fr)_3rem] gap-4 px-3 py-2 text-[11px] font-normal tracking-[0.08em] text-muted-foreground uppercase lg:grid"
+        className="hidden grid-cols-[minmax(16rem,1.5fr)_minmax(9rem,.75fr)_minmax(8rem,.65fr)_3rem] gap-4 px-3 py-2 text-xs font-normal text-muted-foreground lg:grid"
         role="row"
       >
         <span role="columnheader">Member</span>
@@ -317,7 +317,7 @@ function MemberRow({
 
   return (
     <div
-      className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_2.5rem] items-center gap-2 rounded-[12px] px-1 py-2 transition-colors hover:bg-card/65 lg:grid-cols-[minmax(16rem,1.5fr)_minmax(9rem,.75fr)_minmax(8rem,.65fr)_3rem] lg:gap-4 lg:px-3 lg:py-3"
+      className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_2.5rem] items-center gap-2 rounded-lg px-1 py-2 transition-colors hover:bg-card/65 lg:grid-cols-[minmax(16rem,1.5fr)_minmax(9rem,.75fr)_minmax(8rem,.65fr)_3rem] lg:gap-4 lg:px-3 lg:py-3"
       role="row"
     >
       <div className="flex min-w-0 items-center gap-3" role="cell">
@@ -384,7 +384,7 @@ function MemberProfilePreview({
           id={triggerId}
           render={
             <button
-              className="min-w-0 truncate rounded-[6px] px-0.5 py-1 text-left text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35"
+              className="min-w-0 truncate rounded-sm px-0.5 py-1 text-left text-sm font-medium max-md:py-2.5 text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35"
               type="button"
             />
           }
@@ -542,7 +542,7 @@ function InviteWorkspace({
     <Dialog onOpenChange={(open) => !open && setView("compose")}>
       <DialogTrigger
         render={
-          <Button className="rounded-[12px] px-4 font-normal" type="button">
+          <Button className="rounded-lg px-4 font-normal" type="button">
             <Plus aria-hidden="true" data-icon="inline-start" />
             <span className="max-sm:sr-only">Invite</span>
           </Button>
@@ -631,7 +631,7 @@ function InviteForm({
 
   if (assignableRoles.length === 0) {
     return (
-      <p className="rounded-[12px] py-8 text-center text-sm text-muted-foreground">
+      <p className="rounded-lg py-8 text-center text-sm text-muted-foreground">
         No role you can invite yet. Ask an owner.
       </p>
     )
@@ -728,7 +728,7 @@ function InviteManager({
       </div>
 
       {activeInvites.length === 0 ? (
-        <p className="rounded-[12px] py-8 text-center text-sm text-muted-foreground">
+        <p className="rounded-lg py-8 text-center text-sm text-muted-foreground">
           No active invites.
         </p>
       ) : (
@@ -747,7 +747,7 @@ function InviteManager({
 
       {expiredInvites.length > 0 ? (
         <details className="group mt-5">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-[10px] px-2 text-sm font-normal text-muted-foreground outline-none hover:bg-secondary/45 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-lg px-2 text-sm font-normal text-muted-foreground outline-none hover:bg-secondary/45 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35">
             Expired invites
             <span className="ml-1 text-xs text-current/75">{expiredInvites.length}</span>
             <span aria-hidden="true" className="ml-auto transition-transform group-open:rotate-180">
@@ -786,7 +786,7 @@ function InviteItem({
   return (
     <article
       className={cn(
-        "flex items-center gap-3 rounded-[12px] border bg-card/70 p-3",
+        "flex items-center gap-3 rounded-lg border bg-card/70 p-3",
         state === "active" ? "border-success/55" : "border-border"
       )}
       data-invite-state={state}

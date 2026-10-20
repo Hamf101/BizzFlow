@@ -29,3 +29,8 @@ export {
   updateNotificationPreferences,
   type MemberSettings,
 } from "@/services/organizations/membership-service"
+export {
+  changeOrganizationStructure,
+  getOrganizationStructure,
+  type OrganizationStructure,
+} from "@/services/organizations/hierarchy-service"

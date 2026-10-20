@@ -5,6 +5,7 @@ import {
   getCurrentOrganizationContext,
   OrganizationServiceError,
 } from "@/services/organization-service"
+import type { FlowStage } from "@/services/template-flow/contracts"
 import { TemplateFlowServiceError } from "@/services/template-flow-service"
 import { WorkingCopyServiceError } from "@/services/working-copy-service"
 
@@ -62,4 +63,53 @@ export function createTemplateRouteErrorResponse(
       WorkingCopyServiceError,
     ],
   })
+}
+
+/** What a Flow client asks for to hear each stage as it starts: one JSON object a line. */
+export const FLOW_STREAM_TYPE = "application/x-ndjson"
+
+/**
+ * Runs one Flow turn. A client that reads a stream hears each stage as it
+ * starts, then the answer, or an error with the message and status a plain
+ * response would carry; any other client gets the answer in one piece. What
+ * fails before the turn starts, such as sign-in or a rate limit, is answered
+ * by the route as usual, before any stream begins.
+ *
+ * @param request - The route's request, to read what it accepts.
+ * @param routeName - Stable route identifier for logs.
+ * @param run - The turn, told where to report each stage.
+ * @returns The streamed or whole response.
+ */
+export async function streamFlowTurn(
+  request: Request,
+  routeName: string,
+  run: (onStage: (stage: FlowStage) => void) => Promise<unknown>
+): Promise<Response> {
+  if (!request.headers.get("accept")?.includes(FLOW_STREAM_TYPE)) {
+    try {
+      return Response.json(await run(() => undefined))
+    } catch (error: unknown) {
+      return createTemplateRouteErrorResponse(error, routeName)
+    }
+  }
+
+  const encoder = new TextEncoder()
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (line: object): void => controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`))
+
+      try {
+        send({ result: await run((stage) => send({ stage })) })
+      } catch (error: unknown) {
+        const failed = createTemplateRouteErrorResponse(error, routeName)
+        const { error: message } = (await failed.json()) as { error: string }
+        send({ error: message, status: failed.status })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  // No buffering on the way, so each stage reaches the member as it happens.
+  return new Response(body, { headers: { "Cache-Control": "no-store", "Content-Type": `${FLOW_STREAM_TYPE}; charset=utf-8`, "X-Accel-Buffering": "no" } })
 }

@@ -2,34 +2,30 @@ import { expect, expectSaved, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedSigningDocument, seedTemplate } from "../support/seed"
 
-test("writes on a blank document's own page, adds a field with /, and keeps it all", async ({
+test("a blank document opens in one click with the cursor on the page, takes a field with /, and keeps it all", async ({
   admin,
   pageAs,
 }) => {
   const page = await pageAs("owner_admin")
-  const title = uniqueName("Welcome letter")
 
   await page.goto("/documents/new")
-  const create = page.getByRole("button", { exact: true, name: "Create" })
-  await waitForHydration(create)
-  await create.click()
-  const dialog = page.getByRole("dialog", { name: "Create document" })
-  await dialog.getByLabel("Title").fill(title)
-  await dialog.getByRole("button", { name: "Create" }).click()
+  const blank = page.getByRole("button", { name: "Blank document" })
+  await waitForHydration(blank)
+  await blank.click()
   await page.waitForURL(/\/documents\/[0-9a-f-]+\/edit/)
   const documentId = new URL(page.url()).pathname.split("/")[2] as string
 
   // Blank means an empty page: no printed title, header, or page numbers.
-  const emptyPage = page.locator('[data-slot="empty-page"]')
-  await waitForHydration(emptyPage)
   await expect(page.locator("[data-printed-title]")).toHaveCount(0)
   await expect(page.getByText(/^Page 1 of/)).toHaveCount(0)
 
-  await emptyPage.click()
+  // Like a word processor: the cursor is already on the page, so typing just works.
+  await expect(page.locator('[contenteditable="true"]:focus')).toHaveCount(1)
   await page.keyboard.type("Dear tenant,")
   await page.keyboard.press("Enter")
   await page.keyboard.type("/sig")
-  await expect(page.locator('[data-slot="slash-menu"]')).toContainText("Signature")
+  // Every key after the / lands: the menu narrows to Signature and has it chosen.
+  await expect(page.locator('[data-slot="slash-menu"] [aria-selected="true"]')).toHaveText(/Signature/)
   await page.keyboard.press("Enter")
   await expect(page.locator('[data-block-type="signature_field"]')).toBeVisible()
 
@@ -93,4 +89,64 @@ test("Flow is one press away on every workspace page", async ({ isMobile, pageAs
     const bar = await page.getByRole("navigation", { name: "Mobile navigation" }).boundingBox()
     expect(button!.y + button!.height).toBeLessThanOrEqual(bar!.y)
   }
+})
+
+test("New template opens an untitled draft in one click, with the cursor on its page", async ({ admin, pageAs }) => {
+  const page = await pageAs("owner_admin")
+
+  await page.goto("/templates")
+  const tile = page.locator('[data-slot="template-new"]').getByRole("button", { name: "New template" })
+  await waitForHydration(tile)
+  await tile.click()
+  await page.waitForURL(/\/templates\/[0-9a-f-]+\/edit\?new=1$/)
+  const templateId = new URL(page.url()).pathname.split("/")[2] as string
+
+  await expect(page.locator('[contenteditable="true"]:focus')).toHaveCount(1)
+  await page.keyboard.type("Scope of work")
+  await expectSaved(admin, "document_templates", templateId, ({ blocks }) => blocks.map(({ text }) => text)).toEqual(["Scope of work"])
+
+  const made = await admin.from("document_templates").select("title,status").eq("id", templateId).single()
+  if (made.error) throw made.error
+  expect(made.data).toEqual({ status: "draft", title: "Untitled template" })
+})
+
+test("words typed while offline stay on the page and are saved once the connection is back", async ({ admin, pageAs }) => {
+  const page = await pageAs("owner_admin")
+  await page.goto("/dashboard")
+  await page.getByRole("button", { name: "New document" }).click()
+  await page.waitForURL(/\/documents\/[0-9a-f-]+\/edit/)
+  const documentId = new URL(page.url()).pathname.split("/")[2] as string
+  await expect(page.locator('[contenteditable="true"]:focus')).toHaveCount(1)
+
+  await page.context().setOffline(true)
+  await expect(page.getByText("You're offline")).toBeVisible()
+  await page.keyboard.type("Written on site, no signal")
+  await expect(page.getByText("Written on site, no signal")).toBeVisible()
+  // Longer than every retry (1, 3, 8, 15 s): saving must still catch up on reconnect.
+  await page.waitForTimeout(20_000)
+
+  await page.context().setOffline(false)
+  await expect(page.getByText("You're offline")).toBeHidden()
+  await expectSaved(admin, "documents", documentId, ({ blocks }) => blocks.map(({ text }) => text)).toEqual(["Written on site, no signal"])
+})
+
+test("words typed offline, with the tab closed before the connection came back, are saved when the document opens again", async ({ admin, pageAs }) => {
+  const page = await pageAs("owner_admin")
+  await page.goto("/dashboard")
+  await page.getByRole("button", { name: "New document" }).click()
+  await page.waitForURL(/\/documents\/[0-9a-f-]+\/edit/)
+  const address = page.url()
+  const documentId = new URL(address).pathname.split("/")[2] as string
+  await expect(page.locator('[contenteditable="true"]:focus')).toHaveCount(1)
+
+  await page.context().setOffline(true)
+  await page.keyboard.type("Kept on the device")
+  await expect(page.getByText("Offline, kept on this device")).toBeVisible({ timeout: 10_000 })
+  await page.close()
+
+  const context = page.context()
+  await context.setOffline(false)
+  const again = await context.newPage()
+  await again.goto(address)
+  await expectSaved(admin, "documents", documentId, ({ blocks }) => blocks.map(({ text }) => text)).toEqual(["Kept on the device"])
 })

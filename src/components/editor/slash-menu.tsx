@@ -41,7 +41,11 @@ export function SlashMenu({
   return createPortal(
     <div
       aria-label="Add to the page"
-      className="fixed z-50 w-60 overflow-hidden rounded-[14px] border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
+      // Grows from the caret it was typed at, like the app's other menus.
+      className={cn(
+        "fixed z-50 w-60 overflow-hidden rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-xl animate-in fade-in zoom-in-95 duration-150 ease-out",
+        flip ? "origin-bottom-left" : "origin-top-left"
+      )}
       data-slot="slash-menu"
       // The line being typed in points here, and at the active option.
       id="slash-menu"
@@ -68,7 +72,7 @@ export function SlashMenu({
                 <button
                   aria-selected={index === activeIndex}
                   className={cn(
-                    "flex h-9 w-full items-center gap-2.5 rounded-[9px] px-2.5 text-left text-sm outline-none",
+                    "flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-sm outline-none",
                     index === activeIndex && "bg-secondary text-secondary-foreground"
                   )}
                   data-index={index}

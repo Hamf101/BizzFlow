@@ -1,6 +1,6 @@
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
-import { z } from "zod"
+import * as z from "zod"
 
 import { enforceActionRateLimit } from "@/lib/action-rate-limit"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"

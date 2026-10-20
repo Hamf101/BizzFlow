@@ -6,6 +6,70 @@ import type { CreateDocumentUploadUrlResponse } from "@/types/document"
 export const UPLOAD_ACCEPT = ".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv"
 
 /**
+ * Adds a file to Files: prepares the document and its upload, puts the bytes
+ * in storage, and has the server verify them before the version is available.
+ *
+ * @param input - The file, its canonical type, where it goes, its title, and a signal that stops it.
+ * @returns The new document's upload allocation.
+ * @throws Error with a user-safe message when any step is refused.
+ */
+export async function uploadDocumentFile(input: {
+  contentType?: string
+  file: File
+  folderId: string | null
+  organizationId: string
+  /** Told the new document's id once it exists, before its bytes are sent. */
+  onPrepared?: (documentId: string) => void
+  signal?: AbortSignal
+  title: string
+}): Promise<CreateDocumentUploadUrlResponse> {
+  const { file, folderId, organizationId, signal, title } = input
+  const contentType = input.contentType ?? file.type
+  const response = await fetch("/api/documents/upload-url", {
+    body: JSON.stringify({
+      byteSize: file.size,
+      contentType,
+      description: null,
+      folderId,
+      organizationId,
+      originalFilename: file.name,
+      title,
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new Error(await readApiErrorMessage(response, "Unable to prepare upload."))
+  }
+
+  const uploadMetadata = (await response.json()) as CreateDocumentUploadUrlResponse
+
+  input.onPrepared?.(uploadMetadata.documentId)
+  await uploadFileToSignedUrl(uploadMetadata.uploadUrl, file, "Unable to upload file to storage.", contentType, signal)
+  await completeDocumentUploadRequest(uploadMetadata, organizationId, "Unable to complete upload.", signal)
+
+  return uploadMetadata
+}
+
+/**
+ * Takes back a new document whose upload stopped before it completed, so
+ * nothing unopenable is left in Files. Best effort: it outlives the page.
+ *
+ * @param documentId - The document {@link uploadDocumentFile} prepared.
+ * @param organizationId - Its workspace.
+ */
+export function discardDocumentUpload(documentId: string, organizationId: string): void {
+  void fetch(`/api/documents/${encodeURIComponent(documentId)}/complete-upload`, {
+    body: JSON.stringify({ organizationId }),
+    headers: { "content-type": "application/json" },
+    keepalive: true,
+    method: "DELETE",
+  }).catch(() => undefined)
+}
+
+/**
  * Uploads a browser File through a create-only signed object-storage URL.
  *
  * A 412 response is accepted because a retry may follow an earlier successful PUT.
@@ -14,6 +78,7 @@ export const UPLOAD_ACCEPT = ".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv"
  * @param file - Browser file or blob whose type and size were signed by the server.
  * @param failureMessage - User-safe error for storage failures.
  * @param contentType - Optional canonical MIME type when the browser omits it.
+ * @param signal - Stops the upload.
  * @returns A promise that resolves after the object is present.
  * @throws Error when storage rejects the upload for a non-idempotent reason.
  */
@@ -21,9 +86,11 @@ export async function uploadFileToSignedUrl(
   uploadUrl: string,
   file: Blob,
   failureMessage: string,
-  contentType: string = file.type
+  contentType: string = file.type,
+  signal?: AbortSignal
 ): Promise<void> {
   const response = await fetch(uploadUrl, {
+    signal,
     method: "PUT",
     headers: {
       "content-type": contentType,
@@ -43,17 +110,20 @@ export async function uploadFileToSignedUrl(
  * @param uploadMetadata - Server allocation returned with the signed PUT URL.
  * @param organizationId - Tenant that owns the document and version.
  * @param failureMessage - Fallback error when the API response has no message.
+ * @param signal - Stops the request.
  * @returns A promise that resolves after the version is available.
  * @throws Error when completion is rejected.
  */
 export async function completeDocumentUploadRequest(
   uploadMetadata: CreateDocumentUploadUrlResponse,
   organizationId: string,
-  failureMessage: string
+  failureMessage: string,
+  signal?: AbortSignal
 ): Promise<void> {
   const response = await fetch(
     `/api/documents/${uploadMetadata.documentId}/complete-upload`,
     {
+      signal,
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

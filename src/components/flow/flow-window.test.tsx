@@ -63,14 +63,14 @@ it("opens as the Flow window, and Escape folds it back and hands focus to the bu
   await act(async () => launcher().click())
   await frames()
 
-  expect(flow().hidden).toBe(false)
+  expect(flow().style.visibility).toBe("")
   expect(document.getElementById(flow().getAttribute("aria-labelledby")!)?.textContent).toBe("Flow")
   expect(document.activeElement).toBe(flow().querySelector("textarea"))
 
   await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })))
   await frames()
 
-  expect(flow().hidden).toBe(true)
+  expect(flow().style.visibility).toBe("hidden")
   expect(document.activeElement).toBe(launcher())
 })
 
@@ -109,4 +109,23 @@ it("on a phone, pulls taller or shorter from a grab bar that a tap or the arrow 
   expect(switched).not.toBe(opened)
   expect(height()).toBe(switched - 48)
   expect(JSON.parse(localStorage.getItem("bizflow:flow:phone-height")!)).toBe(Math.round(height()))
+})
+
+it("on a phone, takes back its place at the foot of the screen once the browser's bars stop squeezing it", async () => {
+  phone = true
+  await render()
+  const resting = spot()
+  const squeeze = async (height: number): Promise<void> => {
+    await act(async () => {
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: height })
+      window.dispatchEvent(new Event("resize"))
+    })
+    await frames()
+  }
+
+  await squeeze(668)
+  expect(spot()).not.toBe(resting)
+
+  await squeeze(768)
+  expect(spot()).toBe(resting)
 })

@@ -51,7 +51,7 @@ test.describe("onboarding", () => {
       await expect(
         page.getByRole("status").filter({ hasText: "Workspace created" })
       ).toBeVisible()
-      await expect(page.getByText("Welcome back, Talora!", { exact: true })).toBeVisible()
+      await expect(page.getByRole("heading", { level: 1, name: "Welcome back, Talora" })).toBeVisible()
       // The workspace's name sits in the account menu on every screen size.
       await page.getByRole("button", { name: /^Open account menu/ }).click()
       await expect(page.getByRole("menu").getByText(organizationName)).toBeVisible()
@@ -162,3 +162,39 @@ async function cleanUp(
     await admin.auth.admin.deleteUser(data.id as string)
   }
 }
+
+test("home has one heading, the greeting, and offers a new document only to those who can make one", async ({ pageAs }) => {
+  for (const role of ["owner_admin", "staff"] as const) {
+    const page = await pageAs(role)
+    await page.goto("/dashboard")
+
+    await expect(page.getByRole("heading", { level: 1, name: /^Welcome back/ })).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1)
+    await expect(page.getByRole("button", { name: "New document" })).toBeVisible()
+  }
+
+  // An outside reviewer works on what they're given; creating isn't theirs.
+  const reviewer = await pageAs("external_reviewer")
+  await reviewer.goto("/dashboard")
+  await expect(reviewer.getByRole("heading", { level: 1, name: /^Welcome back/ })).toBeVisible()
+  await expect(reviewer.getByRole("button", { name: "New document" })).toHaveCount(0)
+})
+
+test("New document on home makes one blank document even when double-clicked, and opens it", async ({ admin, pageAs }) => {
+  const page = await pageAs("staff")
+  await page.goto("/dashboard")
+  // Specs share the tenant and run in parallel, so count this page's own
+  // create requests rather than the staff member's documents.
+  let creates = 0
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.headers()["next-action"]) creates += 1
+  })
+
+  await page.getByRole("button", { name: "New document" }).dblclick()
+  await expect(page).toHaveURL(/\/documents\/[0-9a-f-]{36}\/edit\?new=1$/)
+  expect(creates).toBe(1)
+
+  const opened = await admin.from("documents").select("title").eq("id", new URL(page.url()).pathname.split("/")[2]!).single()
+  if (opened.error) throw opened.error
+  expect(opened.data.title).toBe("Untitled document")
+})

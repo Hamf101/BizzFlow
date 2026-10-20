@@ -291,6 +291,8 @@ describe("words selected across blocks", () => {
     ])
 
     expect(deleteAcross(ruled, { blockId: B, offset: 2 }, { blockId: D, item: 0, offset: 1 }).ok).toBe(false)
+    // Taking out the field that depends on it too leaves nothing to break.
+    expect(deleteAcross(ruled, { blockId: B, offset: 2 }, { blockId: "70000000-0000-4000-8000-000000000006", offset: 0 })).toMatchObject({ ok: true })
   })
 
   it("pastes several lines as a line each, the words after the caret after the last", () => {

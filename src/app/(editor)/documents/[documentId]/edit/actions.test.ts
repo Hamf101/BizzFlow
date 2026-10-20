@@ -68,7 +68,7 @@ vi.mock("@/services/document-signing-service", async (importOriginal) => {
     ...actual,
     resendDocumentSigningInvitation: vi.fn().mockResolvedValue(undefined),
     saveGeneratedDocumentAnswers: vi.fn().mockResolvedValue(undefined),
-    sendDocumentForSigning: vi.fn().mockResolvedValue(undefined),
+    sendDocumentForSigning: vi.fn().mockResolvedValue({ undelivered: 0 }),
   }
 })
 
@@ -111,7 +111,7 @@ beforeEach(() => {
   vi.mocked(enforceOutboundEmailRateLimit).mockResolvedValue(undefined)
   vi.mocked(resendDocumentSigningInvitation).mockResolvedValue(undefined as never)
   vi.mocked(saveGeneratedDocumentAnswers).mockResolvedValue(undefined as never)
-  vi.mocked(sendDocumentForSigning).mockResolvedValue(undefined as never)
+  vi.mocked(sendDocumentForSigning).mockResolvedValue({ undelivered: 0 } as never)
 })
 
 describe("resendGeneratedDocumentInvitationAction", () => {
@@ -178,6 +178,15 @@ describe("sendGeneratedDocumentAction", () => {
       userId: MEMBER_ID,
       redirectPath: EDITOR_PATH,
     })
+  })
+
+  it("reports a send whose emails partly failed as sent, pointing to Resend", async () => {
+    vi.mocked(sendDocumentForSigning).mockResolvedValue({ undelivered: 1 } as never)
+
+    await expect(sendGeneratedDocumentAction(createSendForm())).rejects.toThrow(
+      `NEXT_REDIRECT:${EDITOR_PATH}?feedback=signing_invitations_partly_sent`
+    )
+    expect(revalidatePathMock).toHaveBeenCalled()
   })
 
   it("throttles before any recipient is mailed", async () => {

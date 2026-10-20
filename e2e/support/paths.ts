@@ -10,7 +10,9 @@ import type { OrganizationRole } from "./tenant"
  * plain module.
  */
 
-const AUTH_DIRECTORY = resolve(process.cwd(), "e2e/.auth")
+// Demo runs (playwright.demo.config.ts) keep their own tenant and sign-ins,
+// so recording a demo never swaps the suite's out from under it.
+const AUTH_DIRECTORY = resolve(process.cwd(), process.env.E2E_DEMO ? "e2e/.auth/demo" : "e2e/.auth")
 
 /** Seeded tenant handles, written once by the setup project. */
 export const TENANT_STATE_PATH = resolve(AUTH_DIRECTORY, "tenant.json")

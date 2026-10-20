@@ -52,6 +52,10 @@ export type SubmissionListFilters = {
   reviewedIds: readonly string[]
   role: OrganizationRole
   statuses: readonly SubmissionStatus[] | null
+  /** Whose submitted work a lead or manager of people looks over; filled in by `withReviewedIds`. */
+  supervisedIds?: readonly string[]
+  /** Whose work a narrowed role sees; null or absent when its reach is everyone. */
+  visibleCreatorIds?: readonly string[] | null
 }
 
 // Filters go through a minimal view of the query builder. Relating
@@ -117,10 +121,18 @@ export function filterVisibleSubmissions<TQuery>(
     filters.organizationId
   )
 
+  const reviewed = filters.reviewedIds.length ? [`id.in.(${filters.reviewedIds.join(",")})`] : []
+  const supervised = filters.supervisedIds?.length ? [`and(created_by.in.(${filters.supervisedIds.join(",")}),status.neq.draft)`] : []
+
   if (filters.role === "staff") {
-    filtered = filters.reviewedIds.length
-      ? filtered.or(`created_by.eq.${filters.actorUserId},id.in.(${filters.reviewedIds.join(",")})`)
+    // Their own; what they review or had shared; and, as a lead or a manager
+    // of people, what those people submitted.
+    filtered = reviewed.length || supervised.length
+      ? filtered.or([`created_by.eq.${filters.actorUserId}`, ...reviewed, ...supervised].join(","))
       : filtered.eq("created_by", filters.actorUserId)
+  } else if (filters.role !== "external_reviewer" && filters.visibleCreatorIds) {
+    // A role narrowed to a branch sees work from the people it sees, and what it reviews.
+    filtered = filtered.or([`created_by.in.(${filters.visibleCreatorIds.join(",")})`, ...reviewed].join(","))
   } else if (filters.role === "external_reviewer") {
     filtered = filtered
       .in("id", filters.reviewedIds)

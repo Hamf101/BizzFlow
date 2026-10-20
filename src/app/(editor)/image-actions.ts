@@ -1,6 +1,6 @@
 "use server"
 
-import { z } from "zod"
+import * as z from "zod"
 
 import type { ImageUploadGrant, ImageUploadRequest } from "@/components/templates/template-image"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   completePublicDocumentSigning,
   DocumentSigningServiceError,
+  fillGeneratedDocumentAnswers,
   getGeneratedDocumentSigningView,
   saveGeneratedDocumentAnswers,
 } from "@/services/document-signing-service"
@@ -21,6 +22,7 @@ import {
   TOKEN_ONE,
 } from "@/services/document-signing-service.test-support"
 import { parseTemplateContent, type TemplateContent } from "@/types/template"
+import { createQuoteContent } from "@/types/template-calculation.test-support"
 
 describe("document signing answer persistence", () => {
   it("keeps the facade error class identical for instanceof checks", () => {
@@ -244,6 +246,28 @@ describe("document signing answer persistence", () => {
     })
   })
 
+  it("signs nothing without consent to sign electronically, and keeps the consent and address with a signature", async () => {
+    const tables = createBaseTables()
+    tables.document_signing_recipients.push(createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com"))
+    tables.document_answers[0].workflow_status = "awaiting_signatures"
+    const client = new FakeClient(tables)
+    const sign = (consented: boolean) =>
+      completePublicDocumentSigning(
+        { consented, ip: "203.0.113.7", token: TOKEN_ONE, values: { client_name: "Acme Ltd" }, signatureDataUrl: DRAWING_DATA_URL },
+        { client: client as never, now: (): Date => NOW }
+      )
+
+    await expect(sign(false)).rejects.toMatchObject({ statusCode: 400 })
+    expect(tables.document_signing_recipients[0]).toMatchObject({ status: "pending", consented_at: null })
+
+    await sign(true)
+    expect(tables.document_signing_recipients[0]).toMatchObject({
+      consented_at: NOW.toISOString(),
+      signed_ip: "203.0.113.7",
+      status: "signed",
+    })
+  })
+
   it("does not overwrite a fresher answer when the submitted value matches its page baseline", async () => {
     const tables = createBaseTables()
     tables.document_signing_recipients.push(
@@ -259,7 +283,7 @@ describe("document signing answer persistence", () => {
     const client = new FakeClient(tables)
 
     const completedView = await completePublicDocumentSigning(
-      {
+      { consented: true,
         token: TOKEN_ONE,
         values: { client_name: "Old value" },
         baselineValues: { client_name: "Old value" },
@@ -290,7 +314,7 @@ describe("document signing answer persistence", () => {
     const client = new FakeClient(tables)
 
     const completedView = await completePublicDocumentSigning(
-      {
+      { consented: true,
         token: TOKEN_ONE,
         values: { client_name: "Intentional edit" },
         baselineValues: { client_name: "Old page value" },
@@ -345,7 +369,7 @@ describe("document signing answer persistence", () => {
     const completingTables = signedTables()
     const completingClient = new FakeClient(completingTables)
     const completed = await completePublicDocumentSigning(
-      {
+      { consented: true,
         baselineValues: { client_name: "As signed" },
         signatureDataUrl: DRAWING_DATA_URL,
         token: secondToken,
@@ -402,7 +426,7 @@ describe("document signing answer persistence", () => {
       const signerTables = tablesWithBoxes(true)
       await expect(
         completePublicDocumentSigning(
-          {
+          { consented: true,
             initialsDataUrl: DRAWING_DATA_URL,
             signatureDataUrl: DRAWING_DATA_URL,
             token: TOKEN_ONE,
@@ -414,6 +438,31 @@ describe("document signing answer persistence", () => {
       expect(signerTables.document_answers[0].values).toEqual({})
       expect(signerTables.document_signing_recipients[0].status).toBe("pending")
     }
+  })
+
+  it("stores the answers a formula works out as the server works them out, whatever a page or a signer sends", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].template_snapshot = createQuoteContent()
+    tables.document_answers[0].values = {}
+    const client = new FakeClient(tables)
+    const saved = await saveGeneratedDocumentAnswers(
+      { actorUserId: MANAGER_ID, organizationId: ORG_ID, documentId: DOCUMENT_ID, values: { items: [["Desk", "2", "10.00", "1"]], total: "1" } },
+      { client: client as never }
+    )
+
+    expect(saved.answers).toMatchObject({ items: [["Desk", "2", "10.00", "20.00"]], subtotal: "20.00", vat: "4.00", total: "24.00" })
+
+    tables.document_signing_recipients.push(createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com"))
+    tables.document_answers[0].workflow_status = "awaiting_signatures"
+
+    // A signer who changes the quantity changes the total with it; the page's total counts for nothing.
+    const signed = await completePublicDocumentSigning(
+      { consented: true, token: TOKEN_ONE, values: { items: [["Desk", "3", "10.00", ""]], total: "0.01" }, baselineValues: saved.answers, signatureDataUrl: DRAWING_DATA_URL },
+      { client: client as never, now: (): Date => NOW }
+    )
+
+    expect(tables.document_answers[0].values).toMatchObject({ items: [["Desk", "3", "10.00", "30.00"]], subtotal: "30.00", total: "36.00" })
+    expect(signed.answers).toMatchObject({ total: "36.00" })
   })
 
   it("prunes a stale hidden value at read and across controller patches", async () => {
@@ -489,7 +538,7 @@ describe("document signing answer persistence", () => {
     const client = new FakeClient(tables)
 
     const completedView = await completePublicDocumentSigning(
-      {
+      { consented: true,
         token: TOKEN_ONE,
         values: {
           include_details: false,
@@ -528,7 +577,7 @@ describe("document signing answer persistence", () => {
 
     await expect(
       completePublicDocumentSigning(
-        {
+        { consented: true,
           token: TOKEN_ONE,
           values: { include_details: true },
           baselineValues: { include_details: false },
@@ -545,6 +594,51 @@ describe("document signing answer persistence", () => {
     expect(tables.document_answers[0].values).toEqual({
       include_details: false,
     })
+  })
+
+  it("fills a document with the answers read off a form, dropping each its fields refuse, and never after a signature", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].template_snapshot = createTemplateContent({ requiredInitials: true })
+    const fill = (client: FakeClient) =>
+      fillGeneratedDocumentAnswers(
+        {
+          actorUserId: MANAGER_ID,
+          // A scanned mark is never anyone's initials here; a key the page lacks is no answer.
+          answers: { client_initials: "AL", client_name: "Ada Lovelace", unknown_field: "x" },
+          documentId: DOCUMENT_ID,
+          organizationId: ORG_ID,
+        },
+        { client: client as never }
+      )
+
+    const filled = await fill(new FakeClient(tables))
+
+    expect(filled).toMatchObject({ dropped: 2, kept: 1, view: { answers: { client_name: "Ada Lovelace" } } })
+    expect(tables.document_answers[0].values).toEqual({ client_name: "Ada Lovelace" })
+
+    tables.document_answers[0].values = {}
+    tables.document_signing_recipients.push({
+      ...createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com"),
+      signed_at: "2026-07-17T19:30:00.000Z",
+      status: "signed",
+    })
+
+    await expect(fill(new FakeClient(tables))).rejects.toMatchObject({ statusCode: 409 })
+    expect(tables.document_answers[0].values).toEqual({})
+  })
+
+  it("counts a filled answer only when the save keeps it, never one the page's own answers hide", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].template_snapshot = createConditionalSigningSnapshot()
+    tables.document_answers[0].values = { include_details: false }
+
+    const filled = await fillGeneratedDocumentAnswers(
+      { actorUserId: MANAGER_ID, answers: { approval_details: "Read off the form" }, documentId: DOCUMENT_ID, organizationId: ORG_ID },
+      { client: new FakeClient(tables) as never }
+    )
+
+    expect(filled).toMatchObject({ dropped: 1, kept: 0 })
+    expect(tables.document_answers[0].values).toEqual({ include_details: false })
   })
 })
 

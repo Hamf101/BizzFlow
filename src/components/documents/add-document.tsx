@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Upload } from "lucide-react"
+import { LayoutTemplate, Plus, Upload } from "lucide-react"
 import { useRouter } from "next/navigation"
 import {
   type ChangeEvent,
@@ -9,14 +9,10 @@ import {
   type ReactNode,
   useState,
 } from "react"
-import { useFormStatus } from "react-dom"
 
-import {
-  completeDocumentUploadRequest,
-  readApiErrorMessage,
-  UPLOAD_ACCEPT,
-  uploadFileToSignedUrl,
-} from "@/components/documents/document-upload-client"
+import { createGeneratedDocumentAction } from "@/app/(dashboard)/documents/actions"
+import { UPLOAD_ACCEPT, uploadDocumentFile } from "@/components/documents/document-upload-client"
+import { OneClickForm } from "@/components/ui/one-click-form"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -26,35 +22,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
 import { bizflowToast } from "@/components/ui/toaster"
 import { trackEvent } from "@/lib/analytics"
-import type { CreateDocumentUploadUrlResponse } from "@/types/document"
 
 /** A published template a new document can copy. */
 export type DocumentTemplateChoice = { id: string; title: string }
 
 const TITLE_MAX_LENGTH = 180
 const TILE =
-  "group grid cursor-pointer justify-items-center gap-2.5 rounded-[12px] px-2.5 py-3 outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/35 focus-visible:ring-2 focus-visible:ring-ring/35"
+  "group grid cursor-pointer justify-items-center gap-2.5 rounded-lg px-2.5 py-3 outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/35 focus-visible:ring-2 focus-visible:ring-ring/35"
 
 /**
- * The two ways to add a document: upload a file, which asks for its title once
- * the file is chosen, or create one, blank or from a template.
+ * The ways to add a document, each one page tile: upload a file, which asks
+ * for its title once the file is chosen, or start one in a single click, blank
+ * or from a published template.
  *
- * @param props - Where the document goes, the templates on offer, and the
- *   server action that creates a document.
- * @returns Two page tiles and the dialog each one opens.
+ * @param props - Where the document goes and the templates on offer.
+ * @returns The page tiles and the upload dialog.
  */
 export function AddDocument({
-  createAction,
   folderId,
   organizationId,
   templates,
 }: {
-  createAction: (formData: FormData) => Promise<void>
   folderId: string | null
   organizationId: string
   templates: DocumentTemplateChoice[]
@@ -62,7 +54,6 @@ export function AddDocument({
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [creating, setCreating] = useState(false)
 
   function chooseFile(event: ChangeEvent<HTMLInputElement>): void {
     setFile(event.target.files?.[0] ?? null)
@@ -81,36 +72,7 @@ export function AddDocument({
 
     try {
       const title = String(new FormData(event.currentTarget).get("title") ?? "").trim()
-      const response = await fetch("/api/documents/upload-url", {
-        body: JSON.stringify({
-          byteSize: file.size,
-          contentType: file.type,
-          description: null,
-          folderId,
-          organizationId,
-          originalFilename: file.name,
-          title,
-        }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      })
-
-      if (!response.ok) {
-        throw new Error(await readApiErrorMessage(response, "Unable to prepare upload."))
-      }
-
-      const uploadMetadata = (await response.json()) as CreateDocumentUploadUrlResponse
-
-      await uploadFileToSignedUrl(
-        uploadMetadata.uploadUrl,
-        file,
-        "Unable to upload file to storage."
-      )
-      await completeDocumentUploadRequest(
-        uploadMetadata,
-        organizationId,
-        "Unable to complete upload."
-      )
+      const uploadMetadata = await uploadDocumentFile({ file, folderId, organizationId, title })
       trackEvent("document_uploaded")
       router.push(`/documents/${uploadMetadata.documentId}`)
       router.refresh()
@@ -124,7 +86,7 @@ export function AddDocument({
 
   return (
     <>
-      <div className="flex justify-center gap-4 sm:gap-8">
+      <div className="flex flex-wrap justify-center gap-4 sm:gap-8">
         <label className={TILE}>
           <input
             accept={UPLOAD_ACCEPT}
@@ -134,9 +96,19 @@ export function AddDocument({
           />
           <PageTile icon={<Upload />} label="Upload" />
         </label>
-        <button className={TILE} onClick={() => setCreating(true)} type="button">
-          <PageTile icon={<Plus />} label="Create" />
-        </button>
+        <OneClickForm action={createGeneratedDocumentAction} className={TILE} fields={{ folderId }}>
+          <PageTile icon={<Plus />} label="Blank document" />
+        </OneClickForm>
+        {templates.map((template: DocumentTemplateChoice) => (
+          <OneClickForm
+            action={createGeneratedDocumentAction}
+            className={TILE}
+            fields={{ folderId, templateId: template.id }}
+            key={template.id}
+          >
+            <PageTile icon={<LayoutTemplate />} label={template.title} />
+          </OneClickForm>
+        ))}
       </div>
 
       <Dialog
@@ -174,42 +146,6 @@ export function AddDocument({
         </DialogContent>
       </Dialog>
 
-      <Dialog onOpenChange={setCreating} open={creating}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create document</DialogTitle>
-          </DialogHeader>
-          <form action={createAction} className="grid gap-5">
-            <input name="folderId" type="hidden" value={folderId ?? ""} />
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="create-title">Title</FieldLabel>
-                <Input
-                  autoFocus
-                  id="create-title"
-                  maxLength={TITLE_MAX_LENGTH}
-                  name="title"
-                  required
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="create-template">Template</FieldLabel>
-                <Select defaultValue="" id="create-template" name="templateId">
-                  <option value="">Blank</option>
-                  {templates.map((template: DocumentTemplateChoice) => (
-                    <option key={template.id} value={template.id}>
-                      {template.title}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </FieldGroup>
-            <DialogFooter>
-              <CreateButton />
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }
@@ -219,22 +155,12 @@ function PageTile({ icon, label }: { icon: ReactNode; label: string }): ReactEle
     <>
       <span
         aria-hidden="true"
-        className="grid w-[120px] place-items-center rounded-[8px] border border-dashed border-muted-foreground/40 text-primary transition-colors group-hover:border-primary/60 sm:w-[150px] [&_svg]:size-6"
+        className="grid w-[120px] place-items-center rounded-md border border-dashed border-muted-foreground/40 text-primary transition-colors group-hover:border-primary/60 sm:w-[150px] [&_svg]:size-6"
         style={{ aspectRatio: "595 / 842" }}
       >
         {icon}
       </span>
       <span className="text-sm text-foreground">{label}</span>
     </>
-  )
-}
-
-function CreateButton(): ReactElement {
-  const { pending } = useFormStatus()
-
-  return (
-    <Button disabled={pending} type="submit">
-      {pending ? "Creating…" : "Create"}
-    </Button>
   )
 }

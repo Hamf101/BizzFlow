@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  describeDocumentKind,
   fileListState,
+  getDocumentHref,
   getDocumentScope,
   isFilesReturnPath,
 } from "@/components/files/file-list-view"
+import type { AccessibleDocumentSummary } from "@/types/document"
+
+describe("sheets in Files", () => {
+  it("opens a sheet in its editor and calls it a Sheet, until it is in Trash", () => {
+    const sheet = { id: "sheet-1", lifecycleState: "active", sourceKind: "sheet" } as AccessibleDocumentSummary
+
+    expect([getDocumentHref(sheet), describeDocumentKind(sheet)]).toEqual(["/documents/sheet-1/edit", "Sheet"])
+    expect(getDocumentHref({ ...sheet, lifecycleState: "archived" })).toBe("/documents/sheet-1/edit")
+    expect(getDocumentHref({ ...sheet, lifecycleState: "trashed" })).toBe("/documents/sheet-1")
+    expect(describeDocumentKind({ ...sheet, sourceKind: "upload" })).toBe("File")
+  })
+})
 
 describe("isFilesReturnPath", () => {
   it("sends people back only to a Files address", () => {

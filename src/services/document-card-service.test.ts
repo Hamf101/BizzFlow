@@ -5,6 +5,7 @@ import {
   createDeps,
   createDocumentRow,
   createMembershipRow,
+  createVersionRow,
   FakeSupabaseClient,
 } from "@/services/document-service.test-support"
 import { createBlankTemplateContent } from "@/types/template"
@@ -44,8 +45,12 @@ function createClient(): FakeSupabaseClient {
         source_kind: "generated",
         template_snapshot: leasePage,
       }),
-      // The member's own upload.
-      createDocumentRow({ created_by: "user-1", id: "document-3" }),
+      // The member's own upload, replaced once: its current version is a picture.
+      createDocumentRow({ created_by: "user-1", current_version_id: "version-2", id: "document-3" }),
+    ],
+    document_versions: [
+      createVersionRow({ document_id: "document-3", id: "version-1" }),
+      createVersionRow({ content_type: "image/png", document_id: "document-3", id: "version-2", version_number: 2 }),
     ],
     document_access_grants: [
       {
@@ -75,6 +80,7 @@ describe("listDocumentCards", () => {
         contentIds: ["document-1", "document-2"],
         documentIds: ["document-1", "document-2", "document-3"],
         organizationId: "org-1",
+        withContentTypes: true,
       },
       createDeps(client)
     )
@@ -84,10 +90,11 @@ describe("listDocumentCards", () => {
         content: expect.objectContaining({
           blocks: [expect.objectContaining({ text: "Lease terms" })],
         }),
+        contentType: null,
         id: "document-1",
         workflowStatus: "awaiting_signatures",
       },
-      { content: null, id: "document-3", workflowStatus: null },
+      { content: null, contentType: "image/png", id: "document-3", workflowStatus: null },
     ])
     expect(
       rpc.mock.calls
@@ -117,8 +124,9 @@ describe("listDocumentCards", () => {
     )
 
     expect(cards).toEqual([
-      { content: null, id: "document-1", workflowStatus: "awaiting_signatures" },
-      { content: null, id: "document-3", workflowStatus: null },
+      { content: null, contentType: null, id: "document-1", workflowStatus: "awaiting_signatures" },
+      // Only Files asks what kind of file an upload is.
+      { content: null, contentType: null, id: "document-3", workflowStatus: null },
     ])
   })
 })

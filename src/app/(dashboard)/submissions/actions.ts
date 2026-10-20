@@ -1,12 +1,14 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import * as z from "zod"
 
 import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
 import type { ActionFeedbackCode } from "@/lib/action-result"
 import {
   ActionError,
   loadActionContext,
+  loadActionContextOrSignIn,
   requireFormId,
   runFormAction,
   type ActionActor,
@@ -17,6 +19,8 @@ import {
   createInternalSubmissionDraft,
   decideSubmissionSuggestion,
   dismissSubmissionChangesRequest,
+  listSubmissionPage,
+  reviewSubmissionsInBulk,
   saveInternalSubmissionDraft,
   setInternalSubmissionReviewers,
   shareInternalSubmission,
@@ -25,6 +29,7 @@ import {
   transitionInternalSubmission,
   type SubmissionReviewTransition,
 } from "@/services/submission-service"
+import type { Submission } from "@/types/submission"
 
 const NO_ORGANIZATION = "Create an organization before managing submissions."
 
@@ -215,7 +220,54 @@ export async function transitionSubmissionAction(
       targetStatus: transition,
       comment: comment || undefined,
     })
+  }, openNextInQueue)
+}
+
+// Once a decision takes the submission out of the queue, the reviewer moves on
+// to the oldest one still waiting, as their queue lists it. One still waiting
+// (an approval of several) or an empty queue keeps them where they were.
+async function openNextInQueue(actor: ActionActor, result: unknown): Promise<{ code: ActionFeedbackCode; path: string } | undefined> {
+  const decided = result as Submission | undefined
+
+  if (!decided || decided.status === "submitted" || decided.status === "in_review") {
+    return undefined
+  }
+
+  const submissionId = decided.id
+  const { submissions } = await listSubmissionPage({
+    ...actor,
+    page: 1,
+    pageSize: 2,
+    sort: { direction: "asc", key: "updated" },
+    statuses: ["submitted", "in_review"],
+    withTotal: false,
   })
+  const next = submissions.find((submission) => submission.id !== submissionId)
+
+  return next ? { code: "submission_reviewed_next", path: getSubmissionPath(next.id) } : undefined
+}
+
+const reviewChangeSchema = z.object({
+  change: z.enum(["approve", "start"]),
+  items: z.array(z.object({ id: z.string().uuid(), revision: z.number().int().positive() })).min(1).max(50),
+})
+
+/** One review step for several selected submissions. */
+export type SubmissionReviewChange = z.infer<typeof reviewChangeSchema>
+
+/**
+ * Starts or approves the selected submissions, each as one at a time would be.
+ *
+ * @param input - The change and the submissions at the revisions shown.
+ * @returns The ids changed, and how many were refused.
+ */
+export async function reviewSubmissionsAction(input: SubmissionReviewChange): Promise<{ changed: string[]; failed: number }> {
+  const change = reviewChangeSchema.parse(input)
+  const { actor } = await loadActionContextOrSignIn("/submissions", NO_ORGANIZATION)
+  const result = await reviewSubmissionsInBulk({ ...change, ...actor })
+
+  revalidatePath("/submissions")
+  return result
 }
 
 /**
@@ -247,7 +299,9 @@ export async function createSubmissionCommentAction(
 async function runSubmissionFormAction(
   formData: FormData,
   feedback: ActionFeedbackCode,
-  run: (actor: ActionActor, submissionId: string) => Promise<unknown>
+  run: (actor: ActionActor, submissionId: string) => Promise<unknown>,
+  // Where to go once it worked, when not back to the same submission.
+  then?: (actor: ActionActor, result: unknown) => Promise<{ code: ActionFeedbackCode; path: string } | undefined>
 ): Promise<never> {
   const submissionId = getFormString(formData, "submissionId")
   const submissionPath = getSubmissionPath(submissionId)
@@ -260,9 +314,10 @@ async function runSubmissionFormAction(
     run: async () => {
       const { actor } = await loadActionContext(NO_ORGANIZATION)
 
-      await run(actor, requireFormId(submissionId, "Submission id"))
+      const result = await run(actor, requireFormId(submissionId, "Submission id"))
       revalidatePath("/submissions")
       revalidatePath(submissionPath)
+      return then?.(actor, result)
     },
   })
 }

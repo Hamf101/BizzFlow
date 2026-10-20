@@ -1,11 +1,12 @@
 "use client"
 
-import { Download, Pencil, Send } from "lucide-react"
+import { Pencil, Send } from "lucide-react"
 import Link from "next/link"
 import { type ReactElement, useMemo, useState } from "react"
 
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { EditorFrame, EditorNotice } from "@/components/editor/editor-frame"
+import { ExportMenu, exportLinks } from "@/components/editor/export-menu"
 import { PaperSigning } from "@/components/editor/paper-field"
 import { useReadOnlyController } from "@/components/editor/read-only-controller"
 import { SendToAnswerDialog } from "@/components/editor/lazy-panels"
@@ -22,7 +23,7 @@ const ignore = (): void => undefined
 
 /**
  * A document as the people filling it see it. Its fields can be tried, but
- * nothing typed here is kept; Edit opens it in the editor.
+ * nothing typed here is kept; Back to editing returns to the editor.
  *
  * @param props - The document, where Back goes and its name, and whether this person may edit, send or share it.
  * @returns The full-screen preview.
@@ -72,16 +73,7 @@ export function DocumentPreview({
             <SendToAnswerDialog name={document.title} onOpenChange={setSending} open source={{ documentId: document.id, kind: "document" }} />
           ) : null}
           {canShare ? <ShareButton iconOnly name={document.title} resource={{ id: document.id, kind: "document" }} /> : null}
-          <a
-            aria-label="Download PDF"
-            className={cn(buttonVariants({ size: "icon", variant: "ghost" }), "size-10")}
-            href={`/api/documents/${encodeURIComponent(document.id)}/pdf`}
-            rel="noreferrer"
-            target="_blank"
-            title="Download PDF"
-          >
-            <Download />
-          </a>
+          <ExportMenu links={exportLinks(`/api/documents/${encodeURIComponent(document.id)}`)} />
         </>
       }
       onRedo={ignore}
@@ -92,7 +84,7 @@ export function DocumentPreview({
         canEdit ? (
           <Link className={cn(buttonVariants(), "h-10 px-4")} href={editHref}>
             <Pencil />
-            Edit
+            Back to editing
           </Link>
         ) : null
       }
@@ -110,8 +102,8 @@ export function DocumentPreview({
             documentTitle={document.title}
             fields="fill"
             narrow={narrow}
-            onAnswerChange={(fieldKey, value) =>
-              setAnswers((current) => applyVisibleTemplateFieldValue(content, current, fieldKey, value))
+            onAnswerChange={(fieldKey, value, settle) =>
+              setAnswers((current) => applyVisibleTemplateFieldValue(content, current, fieldKey, value, settle))
             }
             textEditable={false}
             zoom={zoom}

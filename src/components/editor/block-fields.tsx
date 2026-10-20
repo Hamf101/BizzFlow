@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, X } from "lucide-react"
+import { Calculator, Plus, X } from "lucide-react"
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel, FieldLegend } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { formulaProblem, MAX_FORMULA_LENGTH } from "@/types/template-formula"
 import { Segmented } from "@/components/ui/segmented"
 import { Select } from "@/components/ui/select"
 import {
@@ -21,9 +22,12 @@ import {
   MONTH_NAMES,
   toIsoDate,
 } from "@/lib/date-format"
+import { cn } from "@/lib/utils"
 import { boxSigner, MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
-import type { TemplateBlock } from "@/types/template"
+import { MAX_FIELD_LABEL_LENGTH, type TemplateBlock } from "@/types/template"
 import { evaluateTemplateDropdownOptionEdit } from "@/types/template-structure"
+
+import { VisibilityRuleFields } from "./visibility-rule-fields"
 
 // A choice shows as a dropdown, or with every option on show as radio
 // buttons, or as checkboxes when any number may be ticked.
@@ -117,6 +121,9 @@ export function BlockFields({
                 const format = event.target.value as NonNullable<typeof block.format> | ""
                 const next: typeof block = { ...block, format: format || undefined }
 
+                // Only a number or amount is worked out by a formula.
+                if (format !== "number" && format !== "money") delete next.formula
+
                 // A typed answer is one line.
                 onChange(format ? { ...next, multiline: false } : next)
               }}
@@ -129,18 +136,34 @@ export function BlockFields({
               ))}
             </Select>
           </Field>
+          {block.format === "number" || block.format === "money" ? (
+            <FormulaField
+              block={block}
+              blocks={blocks}
+              id={`${block.id}-formula`}
+              onChange={(formula) => {
+                const next: typeof block = { ...block, comb: undefined, formula }
+
+                if (formula === undefined) delete next.formula
+                onChange(next)
+              }}
+              value={block.formula}
+            />
+          ) : null}
           <div className="grid grid-cols-2 gap-3">
             <AffixField blockId={block.id} label="Before" maxLength={12} onChange={(prefix) => onChange({ ...block, prefix })} value={block.prefix} />
             <AffixField blockId={block.id} label="After" maxLength={24} onChange={(suffix) => onChange({ ...block, suffix })} value={block.suffix} />
           </div>
-          <PlaceholderField
-            blockId={block.id}
-            onChange={(placeholder: string | null): void =>
-              onChange({ ...block, placeholder })
-            }
-            value={block.placeholder}
-          />
-          <CharacterBoxes block={block} onChange={onChange} />
+          {block.formula ? null : (
+            <PlaceholderField
+              blockId={block.id}
+              onChange={(placeholder: string | null): void =>
+                onChange({ ...block, placeholder })
+              }
+              value={block.placeholder}
+            />
+          )}
+          {block.formula ? null : <CharacterBoxes block={block} onChange={onChange} />}
           {block.format || block.comb ? null : (
             <CheckboxControl
               checked={block.multiline}
@@ -241,7 +264,7 @@ export function BlockFields({
     case "table_field":
       return (
         <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
-          <TableColumnsField block={block} onChange={onChange} />
+          <TableColumnsField block={block} blocks={blocks} onChange={onChange} />
           <Field>
             <FieldLabel htmlFor={`${block.id}-rows`}>Rows</FieldLabel>
             <Input
@@ -340,6 +363,68 @@ function SignerField({
   )
 }
 
+/**
+ * The formula a number or amount is worked out by, as a spreadsheet's cell
+ * is. It is kept as typed, and saved once it can be worked out; blank, the
+ * answer is typed in.
+ */
+function FormulaField({
+  block,
+  blocks,
+  column,
+  id,
+  label = "Worked out by",
+  onChange,
+  value,
+}: {
+  block: TemplateBlock
+  blocks: readonly TemplateBlock[]
+  column?: number
+  id: string
+  label?: string
+  onChange: (formula: string | undefined) => void
+  value: string | undefined
+}): ReactElement {
+  const [text, setText] = useState(value ?? "")
+  const [seen, setSeen] = useState(value)
+  const index = blocks.findIndex((candidate) => candidate.id === block.id)
+  const problem = text.trim() ? formulaProblem(blocks, index, text.trim(), column) : null
+
+  // Another formula means undo, a rename, or Flow changed it.
+  if (value !== seen) {
+    setSeen(value)
+    setText(value ?? "")
+  }
+
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        aria-describedby={`${id}-note`}
+        aria-invalid={problem !== null}
+        id={id}
+        maxLength={MAX_FORMULA_LENGTH}
+        onChange={(event: ChangeEvent<HTMLInputElement>): void => {
+          const next = event.target.value.trim()
+
+          setText(event.target.value)
+
+          if (!next || formulaProblem(blocks, index, next, column) === null) {
+            setSeen(next || undefined)
+            onChange(next || undefined)
+          }
+        }}
+        placeholder={column === undefined ? "SUM({Items.Amount}) * 20%" : "{Qty} * {Unit price}"}
+        spellCheck={false}
+        value={text}
+      />
+      <p className={cn("text-xs", problem ? "text-destructive" : "text-muted-foreground")} id={`${id}-note`}>
+        {problem ?? "Name answers above in braces. Leave blank to type the answer."}
+      </p>
+    </Field>
+  )
+}
+
 function AffixField({
   blockId,
   label,
@@ -434,15 +519,21 @@ function WordListField({
 
 function TableColumnsField({
   block,
+  blocks,
   onChange,
 }: {
   block: Extract<TemplateBlock, { type: "table_field" }>
+  blocks: readonly TemplateBlock[]
   onChange: (block: TemplateBlock) => void
 }): ReactElement {
+  const change = (index: number, column: (typeof block.columns)[number]): void =>
+    onChange({ ...block, columns: block.columns.map((other, at) => (at === index ? column : other)) })
   const columns = block.columns
   // Names as typed; one blank or said twice waits there until it is a name of its own.
   const [names, setNames] = useState<readonly string[]>(columns.map((column) => column.label))
   const [seen, setSeen] = useState(columns)
+  // Columns whose working out is shown though they have none yet.
+  const [opened, setOpened] = useState<ReadonlySet<number>>(new Set())
 
   if (columns !== seen) {
     setSeen(columns)
@@ -457,7 +548,8 @@ function TableColumnsField({
       <FieldLegend variant="label">Columns</FieldLegend>
       <div className="grid gap-1.5">
         {columns.map((column, index: number) => (
-          <div className="flex items-center gap-1" key={index}>
+          <div className="grid gap-1.5" key={index}>
+          <div className="flex items-center gap-1">
             <Input
               aria-label={`Column ${index + 1}`}
               maxLength={60}
@@ -477,8 +569,10 @@ function TableColumnsField({
               className="w-28"
               onChange={(event: ChangeEvent<HTMLSelectElement>): void => {
                 const format = event.target.value as NonNullable<typeof column.format> | ""
+                // A number or amount column keeps its formula and total.
+                const kept = format === "number" || format === "money" ? { formula: column.formula, total: column.total } : {}
 
-                onChange({ ...block, columns: columns.map((other, at) => (at === index ? { label: other.label, ...(format ? { format } : {}) } : other)) })
+                change(index, JSON.parse(JSON.stringify({ label: column.label, ...(format ? { format } : {}), ...kept })))
               }}
               value={column.format ?? ""}
             >
@@ -488,6 +582,19 @@ function TableColumnsField({
                 </option>
               ))}
             </Select>
+            {column.format === "number" || column.format === "money" ? (
+              <Button
+                aria-expanded={opened.has(index) || column.formula !== undefined || column.total === true}
+                aria-label={`Work out or total column ${index + 1}`}
+                onClick={(): void => setOpened(new Set(opened.has(index) ? [...opened].filter((at) => at !== index) : [...opened, index]))}
+                size="icon-sm"
+                title="Work out or total"
+                type="button"
+                variant="ghost"
+              >
+                <Calculator />
+              </Button>
+            ) : null}
             <Button
               aria-label={`Remove column ${index + 1}`}
               disabled={columns.length === 1}
@@ -499,6 +606,28 @@ function TableColumnsField({
             >
               <X />
             </Button>
+          </div>
+            {(column.format === "number" || column.format === "money") && (opened.has(index) || column.formula !== undefined || column.total === true) ? (
+              <div className="grid grid-cols-[1fr_auto] items-start gap-3 pb-1 pl-3">
+                <FormulaField
+                  block={block}
+                  blocks={blocks}
+                  column={index}
+                  id={`${block.id}-column-${index}-formula`}
+                  label={`${column.label}: worked out by`}
+                  onChange={(formula) => change(index, JSON.parse(JSON.stringify({ ...column, formula })))}
+                  value={column.formula}
+                />
+                <div className="pt-7">
+                  <CheckboxControl
+                    checked={column.total === true}
+                    id={`${block.id}-column-${index}-total`}
+                    label="Total"
+                    onChange={(total: boolean): void => change(index, JSON.parse(JSON.stringify({ ...column, total: total || undefined })))}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -763,7 +892,7 @@ function FieldBlockFields({
           aria-describedby={labelMissing ? `${block.id}-field-label-error` : undefined}
           aria-invalid={labelMissing}
           id={`${block.id}-field-label`}
-          maxLength={160}
+          maxLength={MAX_FIELD_LABEL_LENGTH}
           onChange={(event: ChangeEvent<HTMLInputElement>): void =>
             onChange({ ...block, label: event.target.value })
           }
@@ -793,116 +922,9 @@ function FieldBlockFields({
         label="Required field"
         onChange={(required: boolean): void => onChange({ ...block, required })}
       />
-      <VisibilityFields block={block} blocks={blocks} onChange={onChange} />
       {children}
+      <VisibilityRuleFields block={block} blocks={blocks} onChange={onChange} />
     </div>
-  )
-}
-
-function VisibilityFields({
-  block,
-  blocks,
-  onChange,
-}: {
-  block: TemplateFieldBlock
-  blocks: readonly TemplateBlock[]
-  onChange: (block: TemplateBlock) => void
-}): ReactElement {
-  const blockIndex = blocks.findIndex(
-    (candidate: TemplateBlock): boolean => candidate.id === block.id
-  )
-  const sources = blocks.slice(0, Math.max(0, blockIndex)).filter(
-    (
-      candidate: TemplateBlock
-    ): candidate is Extract<
-      TemplateBlock,
-      { type: "checkbox_field" | "dropdown_field" }
-    > =>
-      candidate.type === "checkbox_field" ||
-      (candidate.type === "dropdown_field" && candidate.options.length > 0)
-  )
-  const condition = block.visibleWhen
-  const source = sources.find(
-    (candidate): boolean => candidate.id === condition?.sourceBlockId
-  )
-
-  function selectSource(sourceBlockId: string): void {
-    const next = sources.find((candidate): boolean => candidate.id === sourceBlockId)
-
-    onChange({
-      ...block,
-      visibleWhen: next
-        ? {
-            sourceBlockId: next.id,
-            operator: "equals",
-            value: next.type === "checkbox_field" ? true : (next.options[0] ?? ""),
-          }
-        : undefined,
-    })
-  }
-
-  return (
-    <fieldset className="grid gap-3 border-t border-border pt-4">
-      <legend className="text-sm font-semibold">Conditional visibility</legend>
-      <Field>
-        <FieldLabel htmlFor={`${block.id}-visibility-source`}>
-          Show this field when
-        </FieldLabel>
-        <Select
-          id={`${block.id}-visibility-source`}
-          onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
-            selectSource(event.target.value)
-          }
-          value={condition?.sourceBlockId ?? ""}
-        >
-          <option value="">Always visible</option>
-          {sources.map((candidate) => (
-            <option key={candidate.id} value={candidate.id}>
-              {candidate.label}
-            </option>
-          ))}
-        </Select>
-        {sources.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            Add a checkbox or dropdown above first.
-          </p>
-        )}
-      </Field>
-      {source && condition ? (
-        <Field>
-          <FieldLabel htmlFor={`${block.id}-visibility-value`}>Equals</FieldLabel>
-          <Select
-            id={`${block.id}-visibility-value`}
-            onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
-              onChange({
-                ...block,
-                visibleWhen: {
-                  ...condition,
-                  value:
-                    source.type === "checkbox_field"
-                      ? event.target.value === "true"
-                      : event.target.value,
-                },
-              })
-            }
-            value={String(condition.value)}
-          >
-            {source.type === "checkbox_field" ? (
-              <>
-                <option value="true">Checked</option>
-                <option value="false">Unchecked</option>
-              </>
-            ) : (
-              source.options.map((option: string) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))
-            )}
-          </Select>
-        </Field>
-      ) : null}
-    </fieldset>
   )
 }
 

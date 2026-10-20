@@ -592,7 +592,7 @@ describe("organization service atomic mutations", () => {
         },
       ],
       organization_roles: [{ data: [], error: null }],
-    })
+    }, { member_reach: [{ data: { everyone: false, supervised: [], visible: [MEMBER_ID] }, error: null }] })
 
     const people = await listOrganizationPeople(
       MEMBER_ID,
@@ -602,6 +602,29 @@ describe("organization service atomic mutations", () => {
 
     expect(people.invites).toEqual([])
     expect(client.fromCalls).not.toContain("invites")
+  })
+
+  it("lists only the members someone's role and place let them see", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => {})
+    const staff = createMembershipRow(MEMBER_MEMBERSHIP_ID, MEMBER_ID, "staff")
+    const owner = createMembershipRow(OWNER_MEMBERSHIP_ID, OWNER_ID, "owner_admin")
+    const profiles = [
+      { id: MEMBER_ID, email: "member@example.com", full_name: null },
+      { id: OWNER_ID, email: "owner@example.com", full_name: null },
+    ]
+    const asStaff = new QueuedAdminClient(
+      {
+        organization_memberships: [{ data: staff, error: null }, { data: [owner, staff], error: null }],
+        profiles: [{ data: profiles.slice(0, 1), error: null }],
+        organization_roles: [{ data: [], error: null }],
+      },
+      { member_reach: [{ data: { everyone: false, supervised: [], visible: [MEMBER_ID] }, error: null }] }
+    )
+
+    const seen = await listOrganizationPeople(MEMBER_ID, ORGANIZATION_ID, { client: asStaff as never })
+
+    expect(seen.members.map((member) => member.userId)).toEqual([MEMBER_ID])
+    expect(asStaff.rpcCalls).toEqual([{ functionName: "member_reach", args: { target_org_id: ORGANIZATION_ID, target_user_id: MEMBER_ID } }])
   })
 
   it("uses workspace display names and editable role labels in the people list", async () => {

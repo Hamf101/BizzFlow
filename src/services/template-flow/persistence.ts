@@ -53,6 +53,7 @@ export function createFlowMessages(input: {
       id: input.createId(),
       role: "user",
       content: input.instruction,
+      authorUserId: input.actorUserId,
       authorName: input.authorName,
       operations: [],
       changedBlockIds: [],
@@ -63,6 +64,7 @@ export function createFlowMessages(input: {
       id: input.createId(),
       role: "assistant",
       content: input.assistantContent,
+      authorUserId: null,
       authorName: null,
       operations: input.ledgerItems,
       changedBlockIds: input.changedBlockIds,
@@ -70,6 +72,17 @@ export function createFlowMessages(input: {
       createdAt
     }
   ]
+}
+
+/**
+ * The client a Flow read goes through: the one a caller was given, or the
+ * service-role client.
+ *
+ * @param client - An injected client, if any.
+ * @returns The client to read with.
+ */
+export function getFlowClient(client?: TemplateFlowClient): TemplateFlowClient {
+  return client ?? createAdminClient()
 }
 
 export async function requireTemplateManagement(
@@ -263,6 +276,7 @@ function mapFlowMessageRow(row: TemplateFlowMessageRow): TemplateFlowMessage {
     id: row.id,
     role: row.role,
     content: row.content,
+    authorUserId: row.author_user_id,
     authorName: row.author_name,
     operations,
     changedBlockIds,

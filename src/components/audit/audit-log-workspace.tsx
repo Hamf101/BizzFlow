@@ -94,9 +94,9 @@ function AuditEventRow({
 }): ReactElement {
   return (
     <li data-slot="audit-event">
-      <details className="rounded-[12px] transition-colors hover:bg-card/65 open:bg-card/65">
+      <details className="rounded-lg transition-colors hover:bg-card/65 open:bg-card/65">
         <summary
-          className={`grid min-h-14 cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-1 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/35 md:gap-4 md:px-3 [&::-webkit-details-marker]:hidden ${EVENT_GRID}`}
+          className={`grid min-h-14 cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-1 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/35 md:gap-4 md:px-3 [&::-webkit-details-marker]:hidden ${EVENT_GRID}`}
         >
           <span
             className="min-w-0 truncate text-sm font-medium text-foreground"

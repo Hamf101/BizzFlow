@@ -214,7 +214,7 @@ export function SubmissionFileField({
     <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border px-4 py-4">
       {file?.status === "upload_pending" && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-amber-700 dark:text-amber-500">
+          <p className="text-xs text-warning">
             The earlier upload was not verified. Choose the same file to retry
             it, or cancel it and choose another.
           </p>

@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, Folder } from "lucide-react"
+import { ChevronRight } from "lucide-react"
 import Link from "next/link"
 import type { CSSProperties, ReactElement } from "react"
 
@@ -8,6 +8,7 @@ import {
   FileDetails,
   StatusDot,
   type FileEntry,
+  EntryIcon,
 } from "@/components/files/file-entry"
 import { SelectableFileItem } from "@/components/files/file-selection"
 import { cn } from "@/lib/utils"
@@ -65,7 +66,7 @@ export function FileListLayout({
     >
       <div
         className={cn(
-          "hidden gap-4 px-3 py-2 text-[11px] font-normal tracking-[0.08em] text-muted-foreground uppercase lg:grid",
+          "hidden gap-4 px-3 py-2 text-xs font-normal text-muted-foreground lg:grid",
           LIST_GRID
         )}
         role="row"
@@ -82,12 +83,10 @@ export function FileListLayout({
         </span>
       </div>
       {entries.map((entry: FileEntry, index: number) => {
-        const Icon = entry.kind === "folder" ? Folder : FileText
-
         return (
           <SelectableFileItem
             className={cn(
-              "grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-1 py-1.5 transition-colors hover:bg-card/65 lg:gap-4 lg:px-3",
+              "grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-1 py-1.5 transition-colors hover:bg-card/65 lg:gap-4 lg:px-3",
               RISE,
               LIST_GRID,
               entry.id === selected && "bg-secondary/70"
@@ -99,8 +98,9 @@ export function FileListLayout({
             style={riseDelay(index)}
           >
             <div className="flex min-w-0 items-center gap-3" role="cell">
-              <Icon
+              <EntryIcon
                 aria-hidden="true"
+                kind={entry.kind}
                 className={cn(
                   "size-[18px] shrink-0",
                   entry.kind === "folder" ? "text-primary" : "text-muted-foreground"
@@ -109,7 +109,7 @@ export function FileListLayout({
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="flex min-w-0 items-center gap-2">
                   <Link
-                    className="min-w-0 truncate rounded-[6px] text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35"
+                    className="min-w-0 truncate rounded-sm text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35"
                     data-slot="file-name"
                     href={entry.href}
                   >
@@ -153,9 +153,10 @@ export function FileListLayout({
 }
 
 /**
- * Things on a desk: folders and pages with their names underneath. The name's
- * link covers the whole tile, and the tile's menu shows on hover or focus. A
- * ⌘-, Ctrl-, or Shift-click selects a tile instead of opening it.
+ * Cards the way Templates draws them: the name over the item's picture and
+ * its date under it. The name's link covers the whole card; the menu sits in
+ * the card's corner on wide screens and at its foot on phones, never on the
+ * picture. A ⌘-, Ctrl-, or Shift-click selects a card instead of opening it.
  *
  * @param props - The open folder's entries, the chosen one, and extra classes.
  * @returns The Icons layout.
@@ -173,7 +174,7 @@ export function FileIconsLayout({
     <ul
       aria-label="Files"
       className={cn(
-        "grid grid-cols-3 gap-x-1.5 gap-y-3.5 sm:grid-cols-[repeat(auto-fill,minmax(112px,1fr))] sm:gap-x-4 sm:gap-y-5",
+        "grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] sm:gap-4 xl:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]",
         className
       )}
       data-slot="file-icons"
@@ -182,37 +183,44 @@ export function FileIconsLayout({
         <SelectableFileItem
           as="li"
           className={cn(
-            "group/tile relative grid min-w-0 content-start justify-items-center gap-1.5 rounded-[12px] px-1 pt-2.5 pb-2 text-center transition-colors hover:bg-card/65 sm:px-1.5",
+            "group/tile relative grid min-w-0 grid-rows-[auto_1fr_auto] overflow-hidden rounded-lg border border-border bg-card/70 transition-[translate,box-shadow,border-color,background-color] duration-200 active:scale-[0.98] sm:hover:border-primary/35 sm:hover:shadow-[0_10px_24px_rgba(37,35,41,0.1)] sm:motion-safe:hover:-translate-y-0.5",
             RISE,
-            entry.id === selected && "bg-secondary/70"
+            entry.id === selected && "border-primary/45 bg-secondary/70"
           )}
           itemId={entry.id}
           key={entry.id}
           slot="file-tile"
           style={riseDelay(index)}
         >
-          {/* First in the markup so Tab meets it where the eye does, at the
-              tile's top corner, before the name below the picture. */}
-          {entry.menu ? (
-            <div className="absolute top-1 right-1 z-10 opacity-0 transition-opacity group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 has-[[data-popup-open]]:opacity-100 [@media(hover:none)]:opacity-100">
-              {entry.menu}
-            </div>
-          ) : null}
-          <span className="grid h-[70px] w-[58px] items-end justify-items-center sm:h-[86px] sm:w-[72px]">
-            <FileArt entry={entry} size="icon" />
-          </span>
-          <span className="flex max-w-full min-w-0 items-start justify-center gap-1.5">
+          <div className="flex min-w-0 items-start gap-1.5 px-2.5 pt-2.5 pb-2 group-data-[ticking]/tile:pl-9 sm:px-3.5 sm:pt-3 md:group-data-[ticking]/tile:pl-3.5">
             <StatusDot className="mt-[5px]" status={entry.status} />
             <Link
-              className="line-clamp-2 min-w-0 rounded-[6px] text-[11.5px] leading-snug font-medium break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-[12px] focus-visible:after:ring-2 focus-visible:after:ring-ring/35 sm:text-[12.5px]"
+              className="line-clamp-2 min-h-[2.6em] min-w-0 flex-1 rounded-sm text-[11.5px] leading-[1.3] font-medium text-balance break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-lg hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring/35 sm:line-clamp-1 sm:min-h-0 sm:text-[13.5px] sm:leading-snug"
               data-slot="file-name"
               href={entry.href}
             >
               {entry.name}
             </Link>
-          </span>
+            {entry.menu ? (
+              // Above the card's own link, so the menu opens instead of the item.
+              <div className="relative z-10 -my-1 -mr-1.5 max-sm:absolute max-sm:right-1.5 max-sm:bottom-0 max-sm:m-0">
+                {entry.menu}
+              </div>
+            ) : null}
+          </div>
+          <div
+            className={cn(
+              "mx-1.5 grid h-[104px] justify-items-center overflow-hidden rounded-t-md bg-card/45 sm:h-[150px]",
+              entry.kind === "folder" ? "place-items-center" : "pt-3 sm:pt-4"
+            )}
+          >
+            <FileArt entry={entry} size="card" />
+          </div>
           <span
-            className="text-[11px] text-muted-foreground tabular-nums"
+            className={cn(
+              "truncate border-t border-border/60 px-2.5 py-2 text-[10.5px] text-muted-foreground tabular-nums sm:px-3.5 sm:py-2.5 sm:text-xs",
+              entry.menu && "max-sm:pr-10"
+            )}
             data-slot={entry.note ? "file-retention" : "file-meta"}
           >
             {entry.note ??
@@ -242,7 +250,7 @@ export function FileColumnsLayout({
 }): ReactElement {
   return (
     <ColumnsScroller
-      className="flex min-h-[380px] overflow-x-auto rounded-[12px] border border-border bg-card/55"
+      className="flex min-h-[380px] overflow-x-auto rounded-lg border border-border bg-card/55"
       data-slot="file-columns"
     >
       {columns.map((column: FileColumn) => (
@@ -252,22 +260,22 @@ export function FileColumnsLayout({
           key={column.location ?? "top"}
         >
           {column.entries.map((entry: FileEntry) => {
-            const Icon = entry.kind === "folder" ? Folder : FileText
-            const on = entry.id === column.selected
+                const on = entry.id === column.selected
 
             return (
               <li key={entry.id}>
                 <Link
                   aria-current={on ? "true" : undefined}
                   className={cn(
-                    "flex min-w-0 items-center gap-2 rounded-[8px] px-2 py-1.5 text-[12.5px] outline-none transition-colors hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring/35",
+                    "flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] outline-none transition-colors hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring/35",
                     on && "bg-secondary text-secondary-foreground hover:bg-secondary"
                   )}
                   data-slot="file-cell"
                   href={entry.selectHref}
                 >
-                  <Icon
+                  <EntryIcon
                     aria-hidden="true"
+                    kind={entry.kind}
                     className={cn(
                       "size-[15px] shrink-0",
                       entry.kind !== "folder"
@@ -346,7 +354,7 @@ export function FileGalleryLayout({
                 <Link
                   aria-current={on ? "true" : undefined}
                   className={cn(
-                    "grid min-h-[65px] w-[46px] place-items-center rounded-[4px] opacity-75 outline-none transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/35",
+                    "grid min-h-[65px] w-[46px] place-items-center rounded-xs opacity-75 outline-none transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/35",
                     // A ring, not an outline: `outline-none` would hide an outline.
                     on &&
                       "opacity-100 ring-2 ring-primary ring-offset-2 ring-offset-background"

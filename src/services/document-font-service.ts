@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 
-import { z } from "zod"
+import * as z from "zod"
 import { ServiceError } from "@/services/service-error"
 
 // Written by scripts/update-document-fonts.mjs from Fontsource's copy of Google Fonts.

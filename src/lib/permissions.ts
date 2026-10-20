@@ -244,6 +244,22 @@ export function canSendDocument(
 }
 
 /**
+ * Whether someone may change a document in the editor: they may fill
+ * documents, were given it as an Editor, and it is not archived or in Trash.
+ * Everyone else who can open it reads its preview.
+ *
+ * @param subject - The member's role and permissions, or null for someone outside the workspace given this one document.
+ * @param item - The document's access level for them and its lifecycle.
+ * @returns True when the document opens for editing.
+ */
+export function canEditDocument(
+  subject: OrganizationPermissionSubject | null,
+  item: { accessLevel?: string | null; lifecycleState: string }
+): boolean {
+  return (subject === null || canPerformOrganizationAction(subject, "documents:fill")) && item.accessLevel === "contributor" && item.lifecycleState === "active"
+}
+
+/**
  * Returns the legacy base role used for row-scope and workflow rules.
  *
  * @param subject - Static or editable organization permission subject.

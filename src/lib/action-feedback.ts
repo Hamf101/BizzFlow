@@ -1,4 +1,5 @@
 import type { ActionFeedbackCode } from "@/lib/action-result"
+import { TEMPLATE_ANSWERED_MESSAGE } from "@/types/template-trash"
 import type { AnalyticsEventName } from "@/lib/posthog"
 
 type ActionFeedbackDefinition = Readonly<{
@@ -6,6 +7,8 @@ type ActionFeedbackDefinition = Readonly<{
   description?: string
   durationMs: number
   persistent: boolean
+  /** Counted, but no toast: the page it lands on already says it. */
+  quiet?: boolean
   title: string
   tone: "success" | "error" | "info"
 }>
@@ -46,9 +49,11 @@ export const ACTION_FEEDBACK = {
     ...problem("Permanent deletion queued", "The item will be removed after the retention check completes.", "info"),
     persistent: false,
   },
-  document_created: done("Document created"),
+  // The new document or template opening is the notice; a toast would cover its format bar.
+  document_created: { ...done("Document created"), quiet: true },
   document_uploaded: done("Document uploaded", "document_uploaded"),
   folder_created: done("Folder created"),
+  sheet_created: done("Sheet created"),
   invalid_input: problem("Some information needs attention", "Check the information and try again."),
   invite_accepted: done("You joined the workspace"),
   invite_already_member: problem("That person is already a member or invited", "Find them in People. No invite was sent."),
@@ -74,18 +79,27 @@ export const ACTION_FEEDBACK = {
   role_removed: done("Role removed"),
   role_updated: done("Role updated"),
   sample_content_added: done("Sample submissions ready"),
+  signing_cancelled: done("Signing cancelled"),
   signing_invitation_resent: done("Signing invitation resent"),
   signing_invitations_sent: done("Signing invitations sent"),
+  signing_invitations_partly_sent: problem(
+    "Sent for signing",
+    "We couldn't email everyone. Use Resend in the signers list for anyone who didn't get it.",
+    "info"
+  ),
   starter_content_added: done("Starter templates ready"),
+  template_deleted: done("Template deleted"),
+  template_has_answers: problem("This template can't be deleted", TEMPLATE_ANSWERED_MESSAGE, "info"),
   submission_assigned: done("Submission assigned"),
   submission_created: done("Submission created", "submission_created"),
   submission_review_updated: done("Submission review updated"),
+  submission_reviewed_next: { ...done("Review saved"), description: "Here's the next one waiting." },
   submission_shared: done("Sharing updated"),
   submission_submitted: done("Submission sent for review", "submission_submitted"),
   task_completed: done("Task completed", "task_completed"),
   task_created: done("Task created", "task_created"),
   task_status_updated: done("Task status updated"),
-  template_created: done("Template created", "template_created"),
+  template_created: { ...done("Template created", "template_created"), quiet: true },
   template_duplicated: done("Template duplicated", "template_duplicated"),
   template_published: done("Template published", "template_published"),
   template_updated: done("Template updated", "template_published"),

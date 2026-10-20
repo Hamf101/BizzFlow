@@ -9,6 +9,8 @@ import {
   Users,
 } from "lucide-react"
 import type { ComponentType } from "react"
+
+import { FlowIcon } from "@/components/navigation/nav-icons"
 import type { NavigationPreferences } from "@/types/navigation"
 
 import {
@@ -29,6 +31,8 @@ export type NavigationItem = {
    * member may open it — the dashboard, and the personal settings page.
    */
   requiredAction?: OrganizationPermissionAction
+  /** Open to every member, but only once there is a workspace to work in. */
+  needsOrganization?: true
 }
 
 /**
@@ -39,6 +43,7 @@ export type NavigationItem = {
  */
 export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/flow", icon: FlowIcon, label: "Flow", needsOrganization: true },
   {
     href: "/people",
     icon: Users,
@@ -104,7 +109,7 @@ export function getVisibleNavigationItems(
 ): NavigationItem[] {
   if (!role) {
     return NAVIGATION_ITEMS.filter(
-      (item: NavigationItem): boolean => !item.requiredAction
+      (item: NavigationItem): boolean => !item.requiredAction && !item.needsOrganization
     )
   }
 
@@ -135,13 +140,23 @@ export function getMobileNavigationLayout(
   overflow: NavigationItem[]
 } {
   const visible = getVisibleNavigationItems(role, preferences)
-  if (preferences?.order.length) return { primary: visible.slice(0, MOBILE_PRIMARY_COUNT), overflow: visible.slice(MOBILE_PRIMARY_COUNT) }
+  if (preferences?.order.length) {
+    // Flow's own button is always on a phone's screen, so it never takes a slot.
+    const primary = visible.filter((item) => item.href !== "/flow").slice(0, MOBILE_PRIMARY_COUNT)
+    return { primary, overflow: visible.filter((item) => !primary.includes(item)) }
+  }
+  // A reviewer's day is the queue, so Submissions takes Templates' place.
+  const hrefs =
+    role && canPerformOrganizationAction(role, "submissions:review")
+      ? MOBILE_PRIMARY_HREFS.map((href) => (href === "/templates" ? "/submissions" : href))
+      : MOBILE_PRIMARY_HREFS
   const preferred = visible.filter((item: NavigationItem): boolean =>
-    MOBILE_PRIMARY_HREFS.includes(item.href)
+    hrefs.includes(item.href)
   )
-  // Backfill from what is left so a restricted role still gets a full bar.
+  // Backfill from what is left so a restricted role still gets a full bar;
+  // never with Flow, whose own button is always on a phone's screen.
   const remainder = visible.filter(
-    (item: NavigationItem): boolean => !preferred.includes(item)
+    (item: NavigationItem): boolean => !preferred.includes(item) && item.href !== "/flow"
   )
   const primary = [
     ...preferred,

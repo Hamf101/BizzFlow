@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { z } from "zod"
+import * as z from "zod"
 
 import type { ActionFeedbackCode } from "@/lib/action-result"
 import { loadActionContext, runFormAction, type ActionActor } from "@/lib/form-action"
@@ -25,6 +25,7 @@ export async function createPublicFormLinkAction(
       templateId,
       expiresAt: expiresAt || null,
       maxSubmissions: maxSubmissionsRaw ? Number(maxSubmissionsRaw) : null,
+      label: getFormString(formData, "label") || null,
     })
   )
 }

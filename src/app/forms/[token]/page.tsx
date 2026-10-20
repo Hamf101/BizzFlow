@@ -136,9 +136,17 @@ export default async function PublicFormPage({
           ) : null}
         </div>
 
-        <p className="flex items-center justify-center gap-1.5 pb-8 text-xs text-muted-foreground">
-          <ShieldCheck className="size-3.5" />
-          Secured by BizFlow
+        <p className="flex justify-center pb-8 text-xs text-muted-foreground">
+          {/* A new tab, so the answers on this page are never lost to it. */}
+          <a
+            className="flex items-center gap-1.5 underline-offset-4 hover:text-foreground hover:underline"
+            href="/signup?from=form"
+            rel="noopener"
+            target="_blank"
+          >
+            <ShieldCheck className="size-3.5" />
+            Secured by BizFlow
+          </a>
         </p>
       </PublicAnswerForm>
     </main>

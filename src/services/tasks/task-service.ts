@@ -1,3 +1,5 @@
+import type { OrganizationRole } from "@/lib/permissions"
+import { loadMemberReach } from "@/services/member-reach"
 import {
   escapeLikePattern,
   readCountedPage,
@@ -86,6 +88,8 @@ const TASK_PAGE_ORDERS: Record<
 
 type TaskListFilters = {
   assignedTo: string | null
+  /** The members a narrowed role sees: only their tasks. Null or absent for everyone. */
+  visibleIds?: readonly string[] | null
   organizationId: string
   /** Title search text, matched literally and without regard to case. */
   query: string | null
@@ -100,6 +104,7 @@ type TaskFilterQuery = {
   eq(column: string, value: string): TaskFilterQuery
   ilike(column: string, pattern: string): TaskFilterQuery
   in(column: string, values: readonly string[]): TaskFilterQuery
+  or(filters: string): TaskFilterQuery
 }
 
 function filterTaskList<TQuery>(query: TQuery, filters: TaskListFilters): TQuery {
@@ -107,6 +112,11 @@ function filterTaskList<TQuery>(query: TQuery, filters: TaskListFilters): TQuery
     "org_id",
     filters.organizationId
   )
+
+  if (filters.visibleIds) {
+    const ids = filters.visibleIds.join(",")
+    filtered = filtered.or(`assigned_to.in.(${ids}),created_by.in.(${ids})`)
+  }
 
   if (filters.statuses !== null) {
     filtered = filtered.in("status", filters.statuses)
@@ -276,13 +286,14 @@ export async function listTasks(
     },
     async (): Promise<Task[]> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
         "tasks:view",
         "You cannot view tasks."
       )
+      const visibleIds = await loadVisibleTaskPeople(client, role, input)
 
       const statuses = normalizeTaskStatusFilter(input.statuses)
       const assignedTo = normalizeOptionalTaskUuid(
@@ -299,6 +310,7 @@ export async function listTasks(
         organizationId: input.organizationId,
         query: null,
         statuses,
+        visibleIds,
       })
 
       if (submissionId !== null) {
@@ -341,13 +353,14 @@ export async function listTaskPage(
     },
     async (): Promise<TaskPage> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
         "tasks:view",
         "You cannot view tasks."
       )
+      const visibleIds = await loadVisibleTaskPeople(client, role, input)
 
       const page = TASK_LIST_INPUT.page(input.page)
       const pageSize = TASK_LIST_INPUT.pageSize(input.pageSize)
@@ -360,10 +373,11 @@ export async function listTaskPage(
         organizationId: input.organizationId,
         query: TASK_LIST_INPUT.search(input.query),
         statuses: normalizeTaskStatusFilter(input.statuses),
+        visibleIds,
       }
       let query = filterTaskList(
         // tenant-scope: filterTaskList adds .eq("org_id", filters.organizationId)
-        client.from("tasks").select(TASK_COLUMNS, { count: "exact" }),
+        client.from("tasks").select(TASK_COLUMNS, { count: input.withTotal === false ? undefined : "exact" }),
         filters
       )
 
@@ -408,7 +422,7 @@ export async function getTask(
     },
     async (): Promise<TaskDetail> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -416,7 +430,7 @@ export async function getTask(
         "You cannot view tasks."
       )
 
-      const task = await getTaskById(client, input.organizationId, input.taskId)
+      const task = await getReachableTask(client, role, input)
       const reminders = await listTaskReminderRows(
         client,
         input.organizationId,
@@ -450,7 +464,7 @@ export async function updateTask(
     },
     async (): Promise<Task> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -461,7 +475,7 @@ export async function updateTask(
       const expectedRevision = normalizeExpectedTaskRevision(
         input.expectedRevision
       )
-      const task = await requireEditableTask(client, input, expectedRevision)
+      const task = await requireEditableTask(client, role, input, expectedRevision)
       const values: TaskMutationValues = {
         updated_by: input.actorUserId,
         updated_at: taskNowIso(deps),
@@ -540,7 +554,7 @@ export async function assignTask(
     },
     async (): Promise<Task> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -558,7 +572,7 @@ export async function assignTask(
               input.assignedTo,
               "Task assignee must be a valid user id."
             )
-      const task = await requireEditableTask(client, input, expectedRevision)
+      const task = await requireEditableTask(client, role, input, expectedRevision)
 
       if (assignedTo !== null) {
         await requireInternalTaskMember(
@@ -627,7 +641,7 @@ export async function transitionTaskStatus(
     },
     async (): Promise<Task> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -639,11 +653,7 @@ export async function transitionTaskStatus(
         input.expectedRevision
       )
       const targetStatus = normalizeTaskStatus(input.targetStatus)
-      const task = await getTaskById(
-        client,
-        input.organizationId,
-        input.taskId
-      )
+      const task = await getReachableTask(client, role, input)
       assertExpectedRevisionMatches(task, expectedRevision)
 
       if (!canTransitionTaskStatus(task.status, targetStatus)) {
@@ -683,12 +693,30 @@ export async function transitionTaskStatus(
   )
 }
 
+// A narrowed role reaches only the tasks of the people it sees, by link as in
+// the list: reading and changing alike, so a move out of a team ends both.
+async function getReachableTask(
+  client: TaskServiceClient,
+  role: OrganizationRole,
+  input: GetTaskInput
+): Promise<Task> {
+  const task = await getTaskById(client, input.organizationId, input.taskId)
+  const visibleIds = await loadVisibleTaskPeople(client, role, input)
+
+  if (visibleIds && !visibleIds.includes(task.assignedTo ?? "") && !visibleIds.includes(task.createdBy ?? "")) {
+    throw new TaskServiceError("Task was not found.", 404)
+  }
+
+  return task
+}
+
 async function requireEditableTask(
   client: TaskServiceClient,
+  role: OrganizationRole,
   input: GetTaskInput,
   expectedRevision: number
 ): Promise<Task> {
-  const task = await getTaskById(client, input.organizationId, input.taskId)
+  const task = await getReachableTask(client, role, input)
   assertTaskIsOpenForChanges(task)
   assertExpectedRevisionMatches(task, expectedRevision)
 
@@ -744,4 +772,14 @@ async function publishTaskAssignment(
       reason: error instanceof Error ? error.message : "Unknown publish error",
     })
   }
+}
+
+// An owner sees every task; anyone else, the tasks of the people their role
+// reaches, which is everyone until an owner narrows it or places them.
+async function loadVisibleTaskPeople(
+  client: TaskServiceClient,
+  role: OrganizationRole,
+  input: { actorUserId: string; organizationId: string }
+): Promise<readonly string[] | null> {
+  return role === "owner_admin" ? null : (await loadMemberReach(client, input.organizationId, input.actorUserId)).visible
 }

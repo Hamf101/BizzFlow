@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import { MAX_TABLE_FIELD_ROWS } from "@/types/template-answer-kinds"
 import {

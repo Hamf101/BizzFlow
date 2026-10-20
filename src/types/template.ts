@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import {
   answerBoxHeight,
@@ -33,6 +33,9 @@ import {
 import type { DocumentLifecycleState } from "@/types/document"
 import { MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
 import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
+import { formulaProblem, MAX_FORMULA_LENGTH } from "@/types/template-formula"
+import { MARGIN_SIZES } from "@/types/template-margins"
+import { visibilityConditions } from "@/types/template-visibility"
 
 /** Maximum serialized size accepted for one complete guided document layout. */
 export const MAX_TEMPLATE_CONTENT_JSON_LENGTH = 8_000_000
@@ -66,22 +69,71 @@ export const templateImageAssetSchema = z
   })
   .strict()
 
-/** Conditional display rule supported by version-three fillable fields. */
-export const templateFieldVisibilitySchema = z
+/**
+ * How a rule tests an earlier answer. "Equals" on several choices means the
+ * choice is among those ticked; more and less than read a number field.
+ */
+export const VISIBILITY_OPERATORS = ["equals", "not_equals", "answered", "not_answered", "greater_than", "less_than"] as const
+export type VisibilityOperator = (typeof VISIBILITY_OPERATORS)[number]
+
+/** One test of an earlier answer; answered and not answered take no value. */
+export const templateVisibilityConditionSchema = z
   .object({
     sourceBlockId: blockIdSchema,
-    operator: z.literal("equals"),
-    value: z.union([z.boolean(), z.string().trim().max(240)])
+    operator: z.enum(VISIBILITY_OPERATORS),
+    value: z.union([z.boolean(), z.string().trim().max(240)]).optional()
   })
   .strict()
+
+export type TemplateVisibilityCondition = z.infer<typeof templateVisibilityConditionSchema>
+
+/** Most tests one block's rule combines, as form builders allow a handful. */
+export const MAX_VISIBILITY_CONDITIONS = 4
+
+/**
+ * When a version-three block shows: one test, or two to four combined, all
+ * holding or any of them, as form builders store their rules.
+ */
+export const templateFieldVisibilitySchema = z.union([
+  templateVisibilityConditionSchema,
+  z
+    .object({
+      match: z.enum(["all", "any"]),
+      conditions: z.array(templateVisibilityConditionSchema).min(2).max(MAX_VISIBILITY_CONDITIONS)
+    })
+    .strict()
+])
+
+export type TemplateVisibility = z.infer<typeof templateFieldVisibilitySchema>
+
+/** A rule's one test, when it has only one. */
+export function singleVisibilityCondition(rule: TemplateVisibility | undefined): TemplateVisibilityCondition | undefined {
+  return rule !== undefined && "operator" in rule ? rule : undefined
+}
+
+/** A rule from its tests: none is no rule, one stands alone. */
+export function visibilityRule(
+  match: "all" | "any",
+  conditions: readonly TemplateVisibilityCondition[]
+): TemplateVisibility | undefined {
+  return conditions.length === 0 ? undefined : conditions.length === 1 ? conditions[0] : { match, conditions: [...conditions] }
+}
+
+// Lives with the evaluator, so a page that only runs rules never loads these schemas.
+export { visibilityConditions }
+
+const visibleWhenShape = { visibleWhen: templateFieldVisibilitySchema.optional() } as const
+
+/** Long enough for a declaration read out in full beside its tick box. */
+export const MAX_FIELD_LABEL_LENGTH = 300
 
 const fieldBlockShape = {
   id: blockIdSchema,
   fieldKey: fieldKeySchema,
-  label: z.string().trim().min(1).max(160),
+  label: z.string().trim().min(1).max(MAX_FIELD_LABEL_LENGTH),
   required: z.boolean().default(false),
   helpText: z.string().trim().max(500).nullable().default(null),
-  visibleWhen: templateFieldVisibilitySchema.optional()
+  ...visibleWhenShape
 } as const
 
 const boxHeightSchema = z.number().min(BOX_HEIGHT_POINTS.min).max(BOX_HEIGHT_POINTS.max).optional()
@@ -121,13 +173,39 @@ function withRuns<Block extends { runs?: TextRun[]; text: string }>(block: Block
   return (fitted ? { ...rest, runs: fitted } : rest) as Block
 }
 
-function withItemRuns<Block extends { itemRuns?: Array<TextRun[] | null>; items: string[] }>(block: Block): Block {
-  const { itemRuns, ...rest } = block
+function withItemRuns<Block extends { itemRuns?: Array<TextRun[] | null>; items: string[]; levels?: number[] }>(block: Block): Block {
+  const { itemRuns, levels, ...rest } = block
   const fitted = itemRuns?.length === block.items.length
     ? itemRuns.map((runs, index: number) => fitRuns(block.items[index] ?? "", runs) ?? null)
     : []
+  const nested = fitLevels(block.items.length, levels)
 
-  return (fitted.some(Boolean) ? { ...rest, itemRuns: fitted } : rest) as Block
+  return { ...rest, ...(fitted.some(Boolean) ? { itemRuns: fitted } : {}), ...(nested ? { levels: nested } : {}) } as Block
+}
+
+/** How deep a list item can sit: 0 at the top, then (a), then (i). */
+export const MAX_LIST_LEVEL = 2
+
+/**
+ * A list's levels, one an item, each at most one deeper than the item above
+ * it and the first at the top; none when every item is at the top.
+ *
+ * @param count - How many items the list has.
+ * @param levels - The levels as given, if any.
+ * @returns The levels that hold, or undefined for a flat list.
+ */
+export function fitLevels(count: number, levels: readonly number[] | undefined): number[] | undefined {
+  if (!levels?.some((level) => level > 0)) {
+    return undefined
+  }
+
+  const fitted: number[] = []
+
+  for (let index = 0; index < count; index += 1) {
+    fitted.push(Math.max(0, Math.min(levels[index] ?? 0, index === 0 ? 0 : fitted[index - 1]! + 1, MAX_LIST_LEVEL)))
+  }
+
+  return fitted.some((level) => level > 0) ? fitted : undefined
 }
 
 // The block shapes as plain objects, for building other shapes from; the
@@ -139,7 +217,8 @@ export const headingBlockObjectSchema = z
     text: z.string().trim().min(1).max(500),
     runs: textRunsSchema.optional(),
     level: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
-    alignment: z.enum(["left", "center", "right"]).default("left")
+    alignment: z.enum(["left", "center", "right"]).default("left"),
+    ...visibleWhenShape
   })
   .strict()
 
@@ -149,7 +228,8 @@ export const paragraphBlockObjectSchema = z
     type: z.literal("paragraph"),
     text: richTextSchema,
     runs: textRunsSchema.optional(),
-    alignment: z.enum(["left", "center", "right"]).default("left")
+    alignment: z.enum(["left", "center", "right"]).default("left"),
+    ...visibleWhenShape
   })
   .strict()
 
@@ -157,7 +237,10 @@ const listItemsShape = {
   id: blockIdSchema,
   items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(MAX_LIST_ITEMS),
   // Each item's formatting, beside it; null for a plain item.
-  itemRuns: z.array(textRunsSchema.nullable()).max(MAX_LIST_ITEMS).optional()
+  itemRuns: z.array(textRunsSchema.nullable()).max(MAX_LIST_ITEMS).optional(),
+  // How far each item is set in: 0 at the top, 1 under it, 2 below that.
+  levels: z.array(z.number().int().min(0).max(MAX_LIST_LEVEL)).max(MAX_LIST_ITEMS).optional(),
+  ...visibleWhenShape
 } as const
 
 export const bulletListBlockObjectSchema = z
@@ -203,7 +286,8 @@ export const imageBlockSchema = z
       .strict()
       .refine((box) => box.x + box.width <= 100.001 && box.y + box.height <= 100.001, "Image must fit inside its page.")
       .optional(),
-    widthPercent: z.number().int().min(10).max(100).default(100)
+    widthPercent: z.number().int().min(10).max(100).default(100),
+    ...visibleWhenShape
   })
   .strict()
 
@@ -213,7 +297,8 @@ export const tableBlockSchema = z
     id: blockIdSchema,
     type: z.literal("table"),
     headers: z.array(z.string().trim().min(1).max(240)).min(1).max(12),
-    rows: z.array(z.array(z.string().trim().max(2_000)).min(1).max(12)).max(MAX_TABLE_ROWS)
+    rows: z.array(z.array(z.string().trim().max(2_000)).min(1).max(12)).max(MAX_TABLE_ROWS),
+    ...visibleWhenShape
   })
   .strict()
 
@@ -224,6 +309,9 @@ export const dividerBlockSchema = z
     type: z.literal("divider")
   })
   .strict()
+
+const formulaSchema = z.string().trim().min(1).max(MAX_FORMULA_LENGTH)
+const isNumeric = ({ format }: { format?: string }): boolean => format === "number" || format === "money"
 
 /** What a typed answer holds; absent, any text. Each checks what is written and suits a phone's keyboard. */
 export const TEXT_FORMATS = ["number", "money", "email", "phone", "time", "month"] as const
@@ -241,12 +329,20 @@ export const textFieldBlockObjectSchema = z
     prefix: z.string().trim().min(1).max(12).optional(),
     suffix: z.string().trim().min(1).max(24).optional(),
     // One box a character, as a reference or account number is printed.
-    comb: z.number().int().min(2).max(40).optional()
+    comb: z.number().int().min(2).max(40).optional(),
+    // A number or amount worked out from earlier answers, as a spreadsheet's
+    // cell is: "{Qty} * {Unit price}". It is never typed in.
+    formula: formulaSchema.optional()
   })
   .strict()
 
 /** Single-line or multiline text input block. */
-export const textFieldBlockSchema = textFieldBlockObjectSchema.refine((block) => !(block.comb && block.multiline), { message: "Comb boxes hold one line.", path: ["comb"] })
+export const textFieldBlockSchema = textFieldBlockObjectSchema
+  .refine((block) => !(block.comb && block.multiline), { message: "Comb boxes hold one line.", path: ["comb"] })
+  .refine((block) => !block.formula || (isNumeric(block) && !block.multiline && !block.comb), {
+    message: "Only a number or amount on one line is worked out by a formula.",
+    path: ["formula"]
+  })
 
 /** How a date is written, built from three choices the author makes. */
 export const dateFormatSchema = z
@@ -322,7 +418,19 @@ export const tableFieldBlockSchema = z
     ...fieldBlockShape,
     type: z.literal("table_field"),
     columns: z
-      .array(z.object({ label: z.string().trim().min(1).max(60), format: z.enum(TABLE_COLUMN_FORMATS).optional() }).strict())
+      .array(
+        z
+          .object({
+            label: z.string().trim().min(1).max(60),
+            format: z.enum(TABLE_COLUMN_FORMATS).optional(),
+            // Worked out on each row from the columns to its left.
+            formula: formulaSchema.optional(),
+            // Added up on a Total row under the table.
+            total: z.literal(true).optional()
+          })
+          .strict()
+          .refine((column) => (!column.formula && !column.total) || isNumeric(column), "Only a number or amount column is worked out or totalled.")
+      )
       .min(1)
       .max(8)
       .refine((columns) => distinctWords(columns.map((column) => column.label)), "Each column is named once."),
@@ -426,6 +534,8 @@ const marginTextSchema = z
   })
   .strict()
 
+export { MARGIN_SIZES, type MarginSize } from "@/types/template-margins"
+
 /** Page and repeated-element controls captured in version-three snapshots. */
 export const templateLayoutSchema = z
   .object({
@@ -463,8 +573,9 @@ export const templateLayoutSchema = z
      * section, carried over pages.
      */
     sectionStyle: z.enum(["plain", "band", "box"]).optional(),
-    // Titled sections numbered in order: A, B, C or 1, 2, 3. Absent, none.
-    sectionNumbers: z.enum(["letters", "numbers"]).optional(),
+    // Titled sections numbered in order: A, B, C or 1, 2, 3, or as clauses,
+    // 1, 2, 3 with each section's numbered lists going on 3.1, 3.2. Absent, none.
+    sectionNumbers: z.enum(["letters", "numbers", "clauses"]).optional(),
     /**
      * Words in the top and bottom margins, left, centre and right, such as a
      * form's number and revision. {page}, {pages} and {title} are filled in
@@ -616,7 +727,6 @@ export const templateContentSchema = z.union([
 
 export type HeadingBlock = z.infer<typeof headingBlockSchema>
 export type ParagraphBlock = z.infer<typeof paragraphBlockSchema>
-export type CheckboxFieldBlock = z.infer<typeof checkboxFieldBlockSchema>
 export type DropdownFieldBlock = z.infer<typeof dropdownFieldBlockSchema>
 export type ChoiceGridFieldBlock = z.infer<typeof choiceGridFieldBlockSchema>
 export type TableFieldBlock = z.infer<typeof tableFieldBlockSchema>
@@ -701,6 +811,26 @@ function validateVersionThreeStructure(
   validateFieldGroups(content, blockIndexById, sectionStartIndices, context)
   validateBlockRules(content, blockIndexById, context)
   validateFieldVisibility(content, blockIndexById, context)
+  validateFormulas(content, context)
+}
+
+function validateFormulas(content: TemplateContentV3, context: z.RefinementCtx): void {
+  for (const [index, block] of content.blocks.entries()) {
+    const formulas: Array<[string | undefined, (string | number)[], number | undefined]> =
+      block.type === "text_field"
+        ? [[block.formula, ["formula"], undefined]]
+        : block.type === "table_field"
+          ? block.columns.map((column, at) => [column.formula, ["columns", at, "formula"], at])
+          : []
+
+    for (const [formula, path, column] of formulas) {
+      const problem = formula === undefined ? null : formulaProblem(content.blocks, index, formula, column)
+
+      if (problem !== null) {
+        context.addIssue({ code: "custom", message: problem, path: ["blocks", index, ...path] })
+      }
+    }
+  }
 }
 
 function validateSections(
@@ -882,107 +1012,119 @@ function validateBlockRules(
   }
 }
 
+// Answers a rule may test; a drawing, an upload, a grid or a table has no single value to compare.
+const VISIBILITY_SOURCE_TYPES: ReadonlySet<string> = new Set(["checkbox_field", "dropdown_field", "text_field", "date_field"])
+const VISIBILITY_NUMBER = /^-?\d+(?:\.\d+)?$/
+
+/**
+ * Why one test could never be run against its source, or null when it can:
+ * the source must be an answer with a value, the comparison must suit it, and
+ * the value must be one it can hold.
+ */
+export function visibilityConditionProblem(source: TemplateBlock | undefined, condition: TemplateVisibilityCondition): string | null {
+  const { operator, value } = condition
+  const needsValue = operator !== "answered" && operator !== "not_answered"
+
+  if (source === undefined || !VISIBILITY_SOURCE_TYPES.has(source.type)) {
+    return "A rule can test only an earlier tick box, choice, typed answer or date."
+  }
+
+  if (needsValue !== (value !== undefined)) {
+    return needsValue ? "This test needs a value to compare with." : "Answered and not answered compare with no value."
+  }
+
+  if (source.type === "checkbox_field") {
+    return (operator === "equals" || operator === "not_equals") && typeof value === "boolean"
+      ? null
+      : "A checkbox visibility condition must compare a boolean."
+  }
+
+  if (operator === "greater_than" || operator === "less_than") {
+    return source.type === "text_field" && (source.format === "number" || source.format === "money") && typeof value === "string" && VISIBILITY_NUMBER.test(value)
+      ? null
+      : "More or less than compares a number or money answer with a number."
+  }
+
+  if (!needsValue) {
+    return null
+  }
+
+  if (typeof value !== "string" || value.length === 0) {
+    return "Compare with words; a blank answer is tested as not answered."
+  }
+
+  return source.type === "dropdown_field" && !source.options.includes(value)
+    ? "A dropdown visibility condition must compare a declared option."
+    : null
+}
+
 function validateFieldVisibility(
   content: TemplateContentV3,
   blockIndexById: ReadonlyMap<string, number>,
   context: z.RefinementCtx
 ): void {
-  const conditionSources = new Map<string, string>()
+  const conditionSources = new Map<string, string[]>()
 
   for (const [targetIndex, targetBlock] of content.blocks.entries()) {
-    if (!isFieldBlock(targetBlock) || targetBlock.visibleWhen === undefined) {
+    if (!("visibleWhen" in targetBlock) || targetBlock.visibleWhen === undefined) {
       continue
     }
 
-    const condition = targetBlock.visibleWhen
-    const conditionPath = ["blocks", targetIndex, "visibleWhen"]
-    const sourceIndex = blockIndexById.get(condition.sourceBlockId)
-    const sourceBlock =
-      sourceIndex === undefined ? undefined : content.blocks[sourceIndex]
+    const rule = targetBlock.visibleWhen
+    const conditions = visibilityConditions(rule)
 
-    conditionSources.set(targetBlock.id, condition.sourceBlockId)
+    conditionSources.set(targetBlock.id, conditions.map((condition) => condition.sourceBlockId))
 
-    if (condition.sourceBlockId === targetBlock.id) {
-      context.addIssue({
-        code: "custom",
-        message: "A field cannot control its own visibility.",
-        path: [...conditionPath, "sourceBlockId"]
-      })
-      continue
-    }
+    for (const [conditionIndex, condition] of conditions.entries()) {
+      const conditionPath = ["blocks", targetIndex, "visibleWhen", ...("conditions" in rule ? ["conditions", conditionIndex] : [])]
+      const sourceIndex = blockIndexById.get(condition.sourceBlockId)
+      const sourceBlock = sourceIndex === undefined ? undefined : content.blocks[sourceIndex]
 
-    if (sourceIndex === undefined || sourceBlock === undefined) {
-      context.addIssue({
-        code: "custom",
-        message: "A visibility condition must reference an existing field.",
-        path: [...conditionPath, "sourceBlockId"]
-      })
-      continue
-    }
-
-    if (sourceIndex >= targetIndex) {
-      context.addIssue({
-        code: "custom",
-        message: "A visibility source must appear before the conditional field.",
-        path: [...conditionPath, "sourceBlockId"]
-      })
-    }
-
-    if (sourceBlock.type === "checkbox_field") {
-      if (typeof condition.value !== "boolean") {
-        context.addIssue({
-          code: "custom",
-          message: "A checkbox visibility condition must compare a boolean.",
-          path: [...conditionPath, "value"]
-        })
+      if (condition.sourceBlockId === targetBlock.id) {
+        context.addIssue({ code: "custom", message: "A field cannot control its own visibility.", path: [...conditionPath, "sourceBlockId"] })
+        continue
       }
-      continue
-    }
 
-    if (sourceBlock.type === "dropdown_field") {
-      if (
-        typeof condition.value !== "string" ||
-        !sourceBlock.options.includes(condition.value)
-      ) {
-        context.addIssue({
-          code: "custom",
-          message:
-            "A dropdown visibility condition must compare a declared option.",
-          path: [...conditionPath, "value"]
-        })
+      if (sourceIndex === undefined || sourceBlock === undefined) {
+        context.addIssue({ code: "custom", message: "A visibility condition must reference an existing field.", path: [...conditionPath, "sourceBlockId"] })
+        continue
       }
-      continue
-    }
 
-    context.addIssue({
-      code: "custom",
-      message:
-        "Only an earlier checkbox or dropdown can control field visibility.",
-      path: [...conditionPath, "sourceBlockId"]
-    })
+      if (sourceIndex >= targetIndex) {
+        context.addIssue({ code: "custom", message: "A visibility source must appear before the conditional field.", path: [...conditionPath, "sourceBlockId"] })
+      }
+
+      const problem = visibilityConditionProblem(sourceBlock, condition)
+
+      if (problem !== null) {
+        context.addIssue({ code: "custom", message: problem, path: conditionPath })
+      }
+    }
   }
 
-  for (const [targetBlockId, sourceBlockId] of conditionSources.entries()) {
-    const visited = new Set<string>([targetBlockId])
-    let cursor: string | undefined = sourceBlockId
+  // Sources come first, so a cycle also breaks order; this names it plainly.
+  for (const [targetBlockId] of conditionSources) {
+    const seen = new Set<string>()
+    const stack = [...(conditionSources.get(targetBlockId) ?? [])]
 
-    while (cursor !== undefined) {
-      if (visited.has(cursor)) {
+    while (stack.length > 0) {
+      const cursor = stack.pop() as string
+
+      if (cursor === targetBlockId) {
         const targetIndex = blockIndexById.get(targetBlockId)
 
         context.addIssue({
           code: "custom",
           message: "Field visibility conditions cannot form cycles.",
-          path:
-            targetIndex === undefined
-              ? ["blocks"]
-              : ["blocks", targetIndex, "visibleWhen", "sourceBlockId"]
+          path: targetIndex === undefined ? ["blocks"] : ["blocks", targetIndex, "visibleWhen"]
         })
         break
       }
 
-      visited.add(cursor)
-      cursor = conditionSources.get(cursor)
+      if (!seen.has(cursor)) {
+        seen.add(cursor)
+        stack.push(...(conditionSources.get(cursor) ?? []))
+      }
     }
   }
 }
@@ -1003,16 +1145,10 @@ function findSectionIndex(
   return result
 }
 
-function isFieldBlock(
-  block: TemplateBlock
-): block is Extract<TemplateBlock, { fieldKey: string }> {
-  return "fieldKey" in block
-}
-
 /** Every template lifecycle status. */
 export const DOCUMENT_TEMPLATE_STATUSES = ["draft", "published", "archived"] as const
 export type DocumentTemplateStatus = (typeof DOCUMENT_TEMPLATE_STATUSES)[number]
-export type DocumentSourceKind = "upload" | "generated"
+export type DocumentSourceKind = "upload" | "generated" | "sheet"
 export type GeneratedDocumentWorkflowStatus =
   "draft" | "awaiting_signatures" | "completed"
 export type DocumentSigningRecipientStatus = "pending" | "viewed" | "signed"
@@ -1037,6 +1173,8 @@ export type DocumentTemplateRow = Record<string, unknown> & {
   archived_at: string | null
   /** The working copy's revision it was last published at; null until published. */
   published_revision: number | null
+  /** When it went to Trash; only document_templates has it, the published view never holds one. */
+  trashed_at?: string | null
 }
 
 /** One immutable published version of a template. */
@@ -1081,18 +1219,20 @@ export type DocumentTemplate = {
    * version; a working copy past it has changes not yet published.
    */
   publishedRevision: number | null
+  /** When it was moved to Trash, where it is archived until restored or deleted; null otherwise. */
+  trashedAt: string | null
 }
 
 /** Database columns the templates list reads. */
 export type DocumentTemplateSummaryRow = Pick<
   DocumentTemplateRow,
-  "category" | "created_at" | "id" | "org_id" | "revision" | "status" | "title" | "updated_at"
+  "category" | "created_at" | "id" | "org_id" | "revision" | "status" | "title" | "trashed_at" | "updated_at"
 >
 
 /** A template as the templates list shows it, without its content. */
 export type DocumentTemplateSummary = Pick<
   DocumentTemplate,
-  "category" | "createdAt" | "id" | "organizationId" | "revision" | "status" | "title" | "updatedAt"
+  "category" | "createdAt" | "id" | "organizationId" | "revision" | "status" | "title" | "trashedAt" | "updatedAt"
 >
 
 /** A template in the library, with the content its card draws its first page from. */
@@ -1142,6 +1282,14 @@ export type DocumentSigningRecipientRow = Record<string, unknown> & {
   signed_at: string | null
   signature_data: Record<string, unknown> | null
   initials_data: Record<string, unknown> | null
+  /** When they agreed to sign electronically; null before consent was asked. */
+  consented_at?: string | null
+  /** The address they signed from, for the completion certificate. */
+  signed_ip?: string | null
+  declined_at?: string | null
+  decline_reason?: string | null
+  sent_by?: string | null
+  revoked_at?: string | null
 }
 
 /** Database row tracking the last time a member opened a tenant document. */
@@ -1254,12 +1402,16 @@ export function createEmptyDocumentContent(): TemplateContentV3 {
  * @returns Fresh version-three content with current A4 portrait defaults.
  */
 export function createBlankTemplateContent(): TemplateContentV3 {
-  return templateContentV3Schema.parse({
+  const content = templateContentV3Schema.parse({
     schemaVersion: 3,
     blocks: [],
     sections: [],
     fieldGroups: [],
     blockRules: []
   })
+
+  // New paper starts with an inch all round, as a word processor's does;
+  // content saved before keeps the preset it was made with.
+  return { ...content, layout: { ...content.layout, margins: { ...MARGIN_SIZES.normal } } }
 }
 

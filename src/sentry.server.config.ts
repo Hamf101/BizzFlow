@@ -1,4 +1,7 @@
+import * as Sentry from "@sentry/nextjs"
+
 import { getSentryEnv } from "@/lib/env"
+import { setCronMonitor } from "@/lib/observability"
 import { startSentry } from "@/lib/sentry"
 
 const sentryEnv = getSentryEnv()
@@ -16,4 +19,14 @@ if (sentryEnv) {
         (integration) => integration.name !== "Console"
       ),
   })
+
+  // Server only: the browser bundle has no cron monitors.
+  setCronMonitor((slug, schedule, job) =>
+    Sentry.withMonitor(slug, job, {
+      checkinMargin: 10,
+      maxRuntime: 15,
+      schedule: { type: "crontab", value: schedule },
+      timezone: "Etc/UTC",
+    })
+  )
 }

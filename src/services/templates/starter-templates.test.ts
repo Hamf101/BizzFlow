@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest"
 
 import {
+  BUSINESS_KINDS,
   SAMPLE_SUBMISSION_COUNT,
   seedSampleSubmissionsForOrganization,
+  seedStarterTemplatesForOrganization,
   STARTER_TEMPLATES,
 } from "./starter-templates"
 
@@ -26,6 +28,16 @@ class FakeQuery {
   eq(column: string, value: unknown): FakeQuery {
     this.filters.push((row: FakeRow): boolean => row[column] === value)
     return this
+  }
+
+  is(column: string, value: unknown): FakeQuery {
+    this.filters.push((row: FakeRow): boolean => (row[column] ?? null) === value)
+    return this
+  }
+
+  insert(row: FakeRow): Promise<{ error: null }> {
+    this.rows.push(row)
+    return Promise.resolve({ error: null })
   }
 
   private count = Number.POSITIVE_INFINITY
@@ -103,6 +115,25 @@ function createSubmissionDeps(client: FakeClient) {
     submitInternalSubmission: vi.fn(async () => ({})) as never,
   }
 }
+
+describe("seedStarterTemplatesForOrganization", () => {
+  it("adds the starters that suit the kind of business, each once", async () => {
+    const titles = async (businessKind?: (typeof BUSINESS_KINDS)[number]["id"]): Promise<string[]> => {
+      const client = new FakeClient(createTables({ document_templates: [] }))
+      await seedStarterTemplatesForOrganization({ actorUserId: MANAGER_ID, businessKind, organizationId: ORG_ID }, { client: client as never })
+      return client.tables.document_templates.map((row) => row.title as string).sort()
+    }
+
+    expect(await titles("office")).toEqual(["Client Intake", "Expense & Purchase Request", "Time Off Request"])
+    expect(await titles("shop")).toEqual(["Equipment & Facility Inspection", "Expense & Purchase Request", "Incident & Safety Report", "Opening & Closing Checklist", "Time Off Request"])
+    // Without an answer, the field pack as before.
+    expect(await titles()).toEqual(["Equipment & Facility Inspection", "Expense & Purchase Request", "Incident & Safety Report"])
+    // Every kind gets something.
+    for (const kind of BUSINESS_KINDS) {
+      expect((await titles(kind.id)).length).toBeGreaterThanOrEqual(3)
+    }
+  })
+})
 
 describe("starter-templates", () => {
   it("provides valid starter template definitions", () => {

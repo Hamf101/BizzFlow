@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 
+import { createQuoteContent } from "@/types/template-calculation.test-support"
+
 import {
   createUniqueTemplateFieldKey,
   deleteTemplateBlock,
@@ -29,7 +31,9 @@ import {
 import {
   MAX_TEMPLATE_BLOCK_COUNT,
   createBlankTemplateContent,
+  parseTemplateContent,
   templateContentV3Schema,
+  type TemplateBlock,
   type TemplateContentV3
 } from "./template"
 
@@ -950,5 +954,41 @@ describe("moving blocks and sections", () => {
     expect(moveTemplateSection(content, CUSTOMER, "up")).toEqual({ content, success: true })
     // With its account number still asked only after the checkbox, Terms stays below it.
     expect(moveTemplateSection(agreement(), TERMS_SECTION, "up")).toMatchObject({ dependentBlockIds: [NUMBER], success: false })
+  })
+})
+
+describe("formulas through renames", () => {
+  it("renames what a formula names with the field, table or column it names", () => {
+    const quote = createQuoteContent() as TemplateContentV3
+    const [items] = quote.blocks as [Extract<TemplateBlock, { type: "table_field" }>]
+    const renamedTable = updateTemplateBlock(quote, {
+      ...items,
+      label: "Lines",
+      // The table and a column it is named by elsewhere, in one change.
+      columns: items.columns.map((column) =>
+        column.label === "Qty" ? { ...column, label: "Quantity" } : column.label === "Amount" ? { ...column, label: "Cost" } : column
+      ),
+    })
+    const renamed = updateTemplateBlock(renamedTable, { ...renamedTable.blocks[1], label: "Net" } as TemplateBlock)
+    const formulas = renamed.blocks.flatMap((block) =>
+      block.type === "text_field" ? [block.formula] : block.type === "table_field" ? block.columns.map((column) => column.formula) : []
+    )
+
+    expect(formulas).toEqual([undefined, undefined, undefined, "{Quantity} * {Unit price}", "SUM({Lines.Cost})", "{Net} * 20%", "{Net} + {VAT}"])
+    expect(() => parseTemplateContent(renamed)).not.toThrow()
+  })
+
+  it("refuses to delete an answer a formula names, or move it below that formula, and says which formulas", () => {
+    const quote = createQuoteContent() as TemplateContentV3
+    const [items, subtotal, vat, total] = quote.blocks.map((block) => block.id) as [string, string, string, string]
+    const moved = (blockId: string, direction: "up" | "down") => moveTemplateBlockTo(quote, blockId, stepTemplateBlockSlot(quote, blockId, direction)!, "line")
+
+    expect(evaluateTemplateBlockDeletion(quote.blocks, subtotal)).toMatchObject({ code: "formula_source_in_use", dependentBlockIds: [vat, total], success: false })
+    expect(evaluateTemplateBlockDeletion(quote.blocks, subtotal)).toHaveProperty("message", expect.stringContaining("“VAT”, “Total”"))
+    // A table's column, named as {Items.Amount}, counts as the table's.
+    expect(evaluateTemplateBlockDeletion(quote.blocks, items)).toMatchObject({ dependentBlockIds: [subtotal], success: false })
+    expect(evaluateTemplateBlockDeletion(quote.blocks, total)).toEqual({ success: true })
+    expect(moved(subtotal, "down")).toMatchObject({ code: "formula_order_conflict", dependentBlockIds: [vat], success: false })
+    expect(moved(total, "up")).toMatchObject({ code: "formula_order_conflict", dependentBlockIds: [total], success: false })
   })
 })

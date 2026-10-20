@@ -17,6 +17,7 @@ import {
   AiProviderError
 } from "@/services/ai/errors"
 import { DocumentSigningServiceError } from "@/services/document-signing-service"
+import { DRAWING_DATA_URL } from "@/services/document-signing-service.test-support"
 import {
   executeDocumentFlow,
   executeTemplateFlow,
@@ -35,6 +36,8 @@ import {
 } from "@/types/template"
 import type { TemplateFlowMessage } from "@/types/template-flow"
 import { createLongDocumentContent } from "@/types/long-document.test-support"
+import { loadFlowSource } from "@/services/template-flow/import-source"
+import { PDFDocument } from "pdf-lib"
 
 const TEMPLATE_ID = "00000000-0000-4000-8000-000000000010"
 const PARAGRAPH_ID = "00000000-0000-4000-8000-000000000011"
@@ -216,6 +219,7 @@ describe("template Flow service", () => {
         id: "00000000-0000-4000-8000-000000000099",
         role: "assistant",
         content: "What would you like to improve?",
+        authorUserId: null,
         authorName: null,
         operations: [],
         changedBlockIds: [],
@@ -323,6 +327,40 @@ describe("template Flow service", () => {
       expect(result.proposal?.operations.map((operation) => operation.type)).toEqual(["remove_block", "set_branding"])
       expect(result.proposal?.candidateDraft.content).toMatchObject({ blocks: [], branding: { logoDataUrl: null } })
     }
+  })
+
+  it("shows a paragraph by several answers, keeps a rule a restated block leaves out, and takes one off when told", async () => {
+    const content = createContent()
+    content.blocks.push(
+      { id: FIELD_ID, type: "text_field", fieldKey: "income", label: "Income", required: false, helpText: null, placeholder: null, multiline: false, format: "money" },
+      { id: COMPANION_ID, type: "text_field", fieldKey: "employer", label: "Employer", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: FIELD_ID, operator: "answered" } }
+    )
+    const rule = { match: "any", conditions: [{ sourceBlockId: FIELD_ID, operator: "greater_than", value: "50000" }, { sourceBlockId: COMPANION_ID, operator: "not_answered" }] }
+    const restate = (visibleWhen?: null): TestFlowOperation => ({
+      type: "update_block",
+      summary: "Reworded the employer question",
+      payload: { blockId: COMPANION_ID, block: { type: "text_field", fieldKey: "employer", label: "Who employs you?", required: false, helpText: null, placeholder: null, multiline: false, ...(visibleWhen === null ? { visibleWhen } : {}) } },
+    })
+    const { run } = runFlow(content, [
+      { type: "add_block", summary: "Added a note for higher earners", payload: { afterBlockId: COMPANION_ID, block: { type: "paragraph", text: "Read the higher-rate guide.", alignment: "left", visibleWhen: rule } } },
+      restate(),
+    ])
+    const blocks = (await run).proposal?.candidateDraft.content.blocks ?? []
+
+    expect(blocks.at(-1)).toMatchObject({ type: "paragraph", visibleWhen: rule })
+    expect(blocks.find((block) => block.id === COMPANION_ID)).toMatchObject({ label: "Who employs you?", visibleWhen: { operator: "answered" } })
+
+    const removed = await runFlow(content, [restate(null)]).run
+
+    expect(removed.proposal?.candidateDraft.content.blocks.find((block) => block.id === COMPANION_ID)).not.toHaveProperty("visibleWhen")
+ 
+    // A rule Flow writes may lose a test whose source Flow then removes on request.
+    const { run: dropped } = runFlow(content, [
+      { type: "add_block", summary: "Added a note for higher earners", payload: { afterBlockId: COMPANION_ID, block: { type: "paragraph", text: "Read the higher-rate guide.", alignment: "left", visibleWhen: rule } } },
+      { type: "remove_block", summary: "Removed the employer question", payload: { blockId: COMPANION_ID } },
+    ])
+
+    expect((await dropped).proposal?.candidateDraft.content.blocks.at(-1)).toMatchObject({ visibleWhen: { sourceBlockId: FIELD_ID, operator: "greater_than" } })
   })
 
   it("keeps appended free-form blocks in provider operation order", async () => {
@@ -492,6 +530,40 @@ describe("template Flow service", () => {
       provider: TEST_PROVIDER_ID,
       model: TEST_MODEL
     })
+  })
+
+  it("says what it is doing as it does it, so the member never waits on silence", async () => {
+    const stages: string[] = []
+    const aiProvider = createTestAiProvider([rawFlowProviderResult(successfulFlowPayload())])
+
+    await executeTemplateFlow(createInput(createBlankTemplateContent(), "Create an agreement."), {
+      ...createDependencies({ aiProvider }),
+      onStage: (stage) => stages.push(stage),
+    })
+
+    expect(stages).toEqual(["reading", "writing", "checking"])
+  })
+
+  it("hands Flow what the member mentioned, read as them, and nothing when they mention nothing", async () => {
+    const aiProvider = createTestAiProvider([rawFlowProviderResult(successfulFlowPayload())])
+    const asked: unknown[] = []
+    const mention = { id: "76000000-0000-4000-8000-000000000001", kind: "templates" as const }
+    const deps = {
+      ...createDependencies({ aiProvider }),
+      resolveMentions: async (input: unknown) => {
+        asked.push(input)
+        return [{ details: "Template, published. Holds: Vehicle", kind: "templates" as const, name: "Staff parking permit" }]
+      },
+    }
+
+    await executeTemplateFlow({ ...createInput(createBlankTemplateContent(), "Match @Staff parking permit."), mentions: [mention, mention] }, deps)
+    await executeTemplateFlow(createInput(createBlankTemplateContent(), "Create an agreement."), deps)
+
+    const [first, second] = readProviderRequests(aiProvider).map((request) => JSON.parse(request.input) as Record<string, unknown>)
+    expect(first!.mentioned).toEqual([{ details: "Template, published. Holds: Vehicle", kind: "templates", name: "Staff parking permit" }])
+    expect(second).not.toHaveProperty("mentioned")
+    // Each item once, and only for the turn that names it.
+    expect(asked).toEqual([expect.objectContaining({ mentions: [mention] })])
   })
 
   it("runs the model the member picked, and refuses one Flow doesn't offer", async () => {
@@ -1281,6 +1353,93 @@ describe("Flow building with the blocks it adds", () => {
     ])
   })
 
+  it("works out a quote: amounts by formula with a total, then the sums that follow; a formula naming a later answer is refused, and why", async () => {
+    const add = (summary: string, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary, payload: { afterBlockId: null, block } })
+    const money = (fieldKey: string, label: string, formula: string): TestFlowOperation =>
+      add(`Worked out ${label}`, { type: "text_field", fieldKey, label, required: false, helpText: null, placeholder: null, multiline: false, format: "money", prefix: "£", formula })
+    const costs = add("Added the costs", {
+      type: "table_field",
+      fieldKey: "costs",
+      label: "Costs",
+      required: false,
+      helpText: null,
+      columns: [
+        { label: "Item" },
+        { label: "Quantity", format: "number" },
+        { label: "Unit price", format: "money" },
+        { label: "Amount", format: "money", formula: "{Quantity} * {Unit price}", total: true },
+      ],
+      rows: 5,
+    })
+    const { aiProvider, run } = runFlow(createContent(), [
+      costs,
+      money("subtotal", "Subtotal", "SUM({Costs.Amount})"),
+      add("Asked the tax rate", { type: "text_field", fieldKey: "tax_rate", label: "Tax rate", required: true, helpText: null, placeholder: null, multiline: false, format: "number", suffix: "%" }),
+      money("tax", "Tax", "{Subtotal} * {Tax rate}%"),
+      money("total", "Total", "{Subtotal} + {Tax}"),
+    ])
+    const blocks = (await run).proposal?.candidateDraft.content.blocks ?? []
+    const instruction = String(readProviderRequests(aiProvider)[0]?.systemInstruction)
+
+    expect(blocks.find((block) => block.type === "table_field")).toMatchObject({ columns: [{}, {}, {}, { formula: "{Quantity} * {Unit price}", total: true }] })
+    expect(blocks.filter((block) => block.type === "text_field" && block.formula).map((block) => block.type === "text_field" && block.formula)).toEqual([
+      "SUM({Costs.Amount})",
+      "{Subtotal} * {Tax rate}%",
+      "{Subtotal} + {Tax}",
+    ])
+    for (const word of ['"formula"', '"total"', "SUM("]) {
+      expect(instruction).toContain(word)
+    }
+
+    // The total before the subtotal it adds up: refused with the reason, for the one correction.
+    const early = runFlow(createContent(), [money("total", "Total", "{Subtotal} + {Tax}")])
+
+    await expect(early.run).rejects.toMatchObject({ statusCode: 502 })
+    expect(String(readProviderRequests(early.aiProvider)[1]?.input)).toMatch(/formula: Nothing above is called \{Subtotal\}/)
+  })
+
+  it("numbers an agreement's clauses: sections 1, 2 with their lists going on 1.1, and sub-clauses a level in", async () => {
+    const { aiProvider, run } = runFlow(createContent(), [
+      { type: "set_layout", summary: "Numbered the clauses", payload: { sectionNumbers: "clauses" } },
+      { type: "add_block", summary: "Added the services clause", payload: { afterBlockId: null, block: { type: "numbered_list", items: ["The provider does the work.", "On time.", "With care."], levels: [0, 1, 1] } } },
+    ])
+    const draft = (await run).proposal?.candidateDraft.content
+    const instruction = String(readProviderRequests(aiProvider)[0]?.systemInstruction)
+
+    expect(draft && "layout" in draft ? draft.layout.sectionNumbers : null).toBe("clauses")
+    expect(draft?.blocks.at(-1)).toMatchObject({ type: "numbered_list", levels: [0, 1, 1] })
+    expect(instruction).toContain('"levels"')
+    expect(instruction).toContain("letters|numbers|clauses|none")
+
+    // Rewording the clauses keeps their sub-clauses; a list of another length starts flat unless Flow sets levels.
+    const content = createContent()
+    content.blocks.push({ id: FIELD_ID, type: "numbered_list", items: ["The provider does the work.", "On time.", "With care."], levels: [0, 1, 1] })
+    const reword = (items: string[]) => runFlow(content, [{ type: "update_block", summary: "Reworded the services clause", payload: { blockId: FIELD_ID, block: { type: "numbered_list", items } } }]).run
+    const kept = (await reword(["The provider does the work.", "Promptly.", "Carefully."])).proposal?.candidateDraft.content.blocks.at(-1)
+    const regrown = (await reword(["The provider does the work.", "Promptly."])).proposal?.candidateDraft.content.blocks.at(-1)
+
+    expect(kept).toMatchObject({ items: ["The provider does the work.", "Promptly.", "Carefully."], levels: [0, 1, 1] })
+    expect(regrown).not.toHaveProperty("levels")
+  })
+
+  it("sets margins by name or side by side, keeps the sides it does not name, and gives a style its own", async () => {
+    const layoutOf = async (...operations: TestFlowOperation[]) => {
+      const content = (await runFlow(createContent(), operations).run).proposal?.candidateDraft.content
+
+      return content && "layout" in content ? content.layout : null
+    }
+    const margins = (payload: Record<string, unknown>): TestFlowOperation => ({ type: "set_layout", summary: "Set the margins", payload })
+
+    expect((await layoutOf(margins({ margins: "wide" })))?.margins).toEqual({ top: 72, right: 144, bottom: 72, left: 144 })
+    expect((await layoutOf(margins({ margins: "narrow" }), margins({ margins: { left: 90 } })))?.margins).toEqual({ top: 36, right: 36, bottom: 36, left: 90 })
+    expect((await layoutOf(margins({ style: "official" })))?.margins).toEqual({ top: 36, right: 36, bottom: 36, left: 36 })
+
+    const told = runFlow(createContent(), [margins({ margins: "normal" })])
+
+    await told.run
+    expect(String(readProviderRequests(told.aiProvider)[0]?.systemInstruction)).toContain('"margins":"narrow|normal|wide"')
+  })
+
   it("tells the model which operation failed and why, so its one correction lands", async () => {
     const add = { type: "add_block", summary: "Added a note", payload: { ref: "new:1", afterBlockId: null, block: { type: "paragraph", text: "A note.", alignment: "left" } } }
     const { aiProvider, run } = runFlow(createContent(), [add, { type: "move_block", summary: "Moved it up", payload: { blockId: "new:2", afterBlockId: null } }], [add])
@@ -1303,6 +1462,11 @@ describe("Flow building with the blocks it adds", () => {
       [
         /operations\[0\] add_block: .*visibleWhen/,
         [{ type: "add_block", summary: "Asked the pet's name", payload: { afterBlockId: PARAGRAPH_ID, block: { type: "text_field", fieldKey: "name", label: "Pet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: FIELD_ID, operator: "equals", value: true } } } }],
+      ],
+      // Two tests, one naming a field below: dropping that one would quietly weaken the rule.
+      [
+        /operations\[0\] add_block: .*visibleWhen/,
+        [{ type: "add_block", summary: "Asked the vet's name", payload: { afterBlockId: FIELD_ID, block: { type: "text_field", fieldKey: "vet", label: "Vet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { match: "all", conditions: [{ sourceBlockId: FIELD_ID, operator: "equals", value: true }, { sourceBlockId: COMPANION_ID, operator: "answered" }] } } } }],
       ],
       // A move that puts a field's source after it: the field would show for everyone.
       [/operations\[0\] move_block: .*conditional field/, [{ type: "move_block", summary: "Moved the question down", payload: { blockId: FIELD_ID, afterBlockId: COMPANION_ID } }]],
@@ -1599,6 +1763,205 @@ describe("reviewing a Flow proposal change by change", () => {
   })
 })
 
+describe("Flow recreating a form from a file", () => {
+  const SOURCE_ID = "00000000-0000-4000-8000-000000000030"
+  const VERSION_ID = "00000000-0000-4000-8000-000000000031"
+  const PNG_BYTES = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10, 0, 0)
+
+  // Stands in for get_document_access_level: the member views what `visible` holds, in their own organization only.
+  class SourceClient {
+    constructor(readonly tables: Record<string, FakeRow[]>, readonly visible: string[] = [SOURCE_ID]) {}
+
+    from(tableName: string): PostgrestReadQuery {
+      return new PostgrestReadQuery(this.tables[tableName] ?? [])
+    }
+
+    async rpc(_name: string, args: Record<string, unknown>): Promise<{ data: "viewer" | null; error: null }> {
+      const document = this.tables.documents?.find((row) => row.id === args.target_document_id && row.org_id === args.target_org_id)
+
+      return { data: document && this.visible.includes(String(document.id)) ? "viewer" : null, error: null }
+    }
+  }
+
+  function sourceClient(file: { contentType: string; byteSize: number }, overrides: { documentOrg?: string; visible?: string[] } = {}): SourceClient {
+    const orgId = overrides.documentOrg ?? "org-1"
+    const stamp = "2026-07-23T17:00:00.000Z"
+
+    return new SourceClient(
+      {
+        organization_memberships: [
+          { id: "membership-1", org_id: "org-1", user_id: "user-1", role: "staff", status: "active", created_at: stamp, updated_at: stamp }
+        ],
+        documents: [
+          { id: SOURCE_ID, org_id: orgId, folder_id: null, title: "Intake", description: null, current_version_id: VERSION_ID, source_kind: "upload", lifecycle_state: "active", created_by: "user-2", updated_by: "user-2", archived_by: null, archived_at: null, created_at: stamp, updated_at: stamp }
+        ],
+        document_versions: [
+          { id: VERSION_ID, org_id: orgId, document_id: SOURCE_ID, version_number: 1, status: "available", storage_key: "organizations/org-1/documents/source/original", original_filename: "intake", content_type: file.contentType, byte_size: file.byteSize, checksum_sha256: "0".repeat(64), uploaded_by: "user-2", created_at: stamp, updated_at: stamp }
+        ]
+      },
+      overrides.visible
+    )
+  }
+
+  async function pdfOfPages(pages: number): Promise<Uint8Array> {
+    const pdf = await PDFDocument.create()
+
+    for (let page = 0; page < pages; page += 1) pdf.addPage()
+
+    return pdf.save()
+  }
+
+  function runSourceTurn(
+    client: SourceClient,
+    bytes: Uint8Array,
+    aiProvider: AiProvider = createTestAiProvider([flowProviderResult(successfulFlowPayload())]),
+    content: TemplateContent = createBlankTemplateContent()
+  ) {
+    const readObject = vi.fn(async (): Promise<Uint8Array> => bytes)
+    const run = executeTemplateFlow(
+      { ...createInput(content, "Recreate this form."), sourceDocumentId: SOURCE_ID },
+      createDependencies({ aiProvider, loadSource: (input) => loadFlowSource(input, { client: client as never, readObject }) })
+    )
+
+    return { aiProvider, readObject, run }
+  }
+
+  it("sends the uploaded PDF once, as it is stored, and stages the form it recreates", async () => {
+    const pdf = await pdfOfPages(2)
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({ ...successfulFlowPayload(), operations: [createTextFieldOperation("Added the name", "Full name")] })
+    ])
+    const { run } = runSourceTurn(sourceClient({ contentType: "application/pdf", byteSize: pdf.byteLength }), pdf, aiProvider)
+    const result = await run
+
+    expect(readProviderRequests(aiProvider).map((request) => request.attachments)).toEqual([
+      [{ kind: "document", mimeType: "application/pdf", data: pdf }]
+    ])
+    expect(result.proposal?.candidateDraft.content.blocks).toEqual([expect.objectContaining({ type: "text_field", label: "Full name" })])
+  })
+
+  it("treats another organization's file, and one the member cannot view, as not found, and never asks the model", async () => {
+    for (const overrides of [{ documentOrg: "org-2" }, { visible: [] }]) {
+      const { aiProvider, readObject, run } = runSourceTurn(sourceClient({ contentType: "image/png", byteSize: PNG_BYTES.byteLength }, overrides), PNG_BYTES)
+
+      await expect(run).rejects.toMatchObject({ statusCode: 404 })
+      expect(readObject).not.toHaveBeenCalled()
+      expect(readProviderRequests(aiProvider)).toHaveLength(0)
+    }
+  })
+
+  it("reads a form in a document's own Flow too, and refuses another organization's as not found before the model", async () => {
+    const pdf = await pdfOfPages(1)
+    const turn = (client: SourceClient, aiProvider: AiProvider) =>
+      executeDocumentFlow(
+        {
+          actorUserId: "user-1",
+          documentId: "00000000-0000-4000-8000-000000000020",
+          draft: { title: "Lease, Flat 3B", description: "", content: createBlankTemplateContent() },
+          instruction: "Recreate this form.",
+          organizationId: "org-1",
+          sourceDocumentId: SOURCE_ID
+        },
+        {
+          ...createDependencies({ aiProvider, loadSource: (input) => loadFlowSource(input, { client: client as never, readObject: async () => pdf }) }),
+          authorizeDocument: async (): Promise<void> => {}
+        }
+      )
+    const elsewhere = createTestAiProvider([flowProviderResult(successfulFlowPayload())])
+
+    await expect(turn(sourceClient({ contentType: "application/pdf", byteSize: pdf.byteLength }, { documentOrg: "org-2" }), elsewhere)).rejects.toMatchObject({ statusCode: 404 })
+    expect(readProviderRequests(elsewhere)).toHaveLength(0)
+
+    const here = createTestAiProvider([flowProviderResult(successfulFlowPayload())])
+
+    await turn(sourceClient({ contentType: "application/pdf", byteSize: pdf.byteLength }), here)
+    expect(readProviderRequests(here).map((request) => request.attachments)).toEqual([[{ kind: "document", mimeType: "application/pdf", data: pdf }]])
+  })
+
+  it("refuses a file Flow cannot read, and never asks the model", async () => {
+    const elevenPages = await pdfOfPages(11)
+    const locked = await PDFDocument.create()
+    locked.addPage()
+    locked.encrypt({ ownerPassword: "owner", userPassword: "reader" })
+    const passwordProtected = await locked.save()
+    const refusals = [
+      { file: { contentType: "text/csv", byteSize: 4 }, bytes: new TextEncoder().encode("a,b\n"), statusCode: 415 },
+      { file: { contentType: "image/png", byteSize: 4 }, bytes: new TextEncoder().encode("%PDF"), statusCode: 415 },
+      { file: { contentType: "image/png", byteSize: 15 * 1024 * 1024 + 1 }, bytes: PNG_BYTES, statusCode: 413 },
+      { file: { contentType: "application/pdf", byteSize: elevenPages.byteLength }, bytes: elevenPages, statusCode: 422 },
+      { file: { contentType: "application/pdf", byteSize: 9 }, bytes: new TextEncoder().encode("%PDF-1.7 "), statusCode: 422 },
+      { file: { contentType: "application/pdf", byteSize: passwordProtected.byteLength }, bytes: passwordProtected, statusCode: 422 }
+    ]
+
+    for (const refusal of refusals) {
+      const { aiProvider, run } = runSourceTurn(sourceClient(refusal.file), refusal.bytes)
+
+      await expect(run).rejects.toMatchObject({ statusCode: refusal.statusCode })
+      expect(readProviderRequests(aiProvider)).toHaveLength(0)
+    }
+  })
+
+  it("keeps the answers read off the form that fit its fields, never a signature, and returns them with the proposal", async () => {
+    const signature = { type: "signature_field", fieldKey: "signature", label: "Signature", required: false, helpText: null, signer: "sender" }
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        ...successfulFlowPayload(),
+        operations: [
+          createTextFieldOperation("Added the name", "Full name"),
+          { type: "add_block", summary: "Added the date of birth", payload: { afterBlockId: null, block: { type: "date_field", fieldKey: "date_of_birth", label: "Date of birth", required: false, helpText: null } } },
+          { type: "add_block", summary: "Added the signature", payload: { afterBlockId: null, block: signature } }
+        ],
+        sourceAnswersJson: JSON.stringify({
+          provider_supplied_key: "  Ada Lovelace ",
+          date_of_birth: "not a date",
+          signature: DRAWING_DATA_URL,
+          shoe_size: "9"
+        })
+      })
+    ])
+    const { run } = runSourceTurn(sourceClient({ contentType: "image/png", byteSize: PNG_BYTES.byteLength }), PNG_BYTES, aiProvider)
+    const result = await run
+
+    expect(readProviderRequests(aiProvider)[0]?.attachments).toEqual([{ kind: "image", mimeType: "image/png", data: PNG_BYTES }])
+    expect(result.proposal?.sourceAnswers).toEqual({ full_name: "Ada Lovelace" })
+  })
+
+  it("files an answer under the key Flow gives its field, not the one the model wrote", async () => {
+    const nameField = { type: "text_field", fieldKey: "name", label: "Name", required: false, helpText: null, placeholder: null, multiline: false } as const
+    const content = createBlankTemplateContent()
+    content.blocks = [{ ...nameField, id: FIELD_ID }]
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        ...successfulFlowPayload(),
+        operations: [{ type: "add_block", summary: "Added the pet's name", payload: { afterBlockId: FIELD_ID, block: nameField } }],
+        sourceAnswersJson: JSON.stringify({ name: "Biscuit" })
+      })
+    ])
+    const { run } = runSourceTurn(sourceClient({ contentType: "image/png", byteSize: PNG_BYTES.byteLength }), PNG_BYTES, aiProvider, content)
+
+    // "name" was taken by the field already there, which this form never answered.
+    expect((await run).proposal?.sourceAnswers).toEqual({ name_2: "Biscuit" })
+  })
+
+  it("drops an answer whose key the model wrote on two different fields, rather than guess which", async () => {
+    const field = (label: string) => ({ type: "text_field", fieldKey: "name", label, required: false, helpText: null, placeholder: null, multiline: false })
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        ...successfulFlowPayload(),
+        operations: [
+          { type: "add_block", summary: "Added the owner", payload: { afterBlockId: null, block: field("Owner name") } },
+          { type: "add_block", summary: "Added the pet", payload: { afterBlockId: null, block: field("Pet name") } },
+          { type: "add_block", summary: "Added the vet", payload: { afterBlockId: null, block: { ...field("Vet"), fieldKey: "vet" } } }
+        ],
+        sourceAnswersJson: JSON.stringify({ name: "Ada", vet: "Dr. Lee" })
+      })
+    ])
+    const { run } = runSourceTurn(sourceClient({ contentType: "image/png", byteSize: PNG_BYTES.byteLength }), PNG_BYTES, aiProvider)
+
+    expect((await run).proposal?.sourceAnswers).toEqual({ vet: "Dr. Lee" })
+  })
+})
+
 function createTextFieldOperation(
   summary: string,
   label: string
@@ -1738,9 +2101,7 @@ function readOtherCompanions(
     ): block is Extract<TemplateBlock, { type: "text_field" }> =>
       block.type === "text_field" &&
       block.required &&
-      block.visibleWhen?.sourceBlockId === dropdownId &&
-      block.visibleWhen.operator === "equals" &&
-      block.visibleWhen.value === "Other"
+      JSON.stringify(block.visibleWhen) === JSON.stringify({ sourceBlockId: dropdownId, operator: "equals", value: "Other" })
   )
 }
 
@@ -1833,6 +2194,7 @@ type TestFlowPayload = {
   needsConfirmation: boolean
   confirmationQuestion: string
   operations: TestFlowOperation[]
+  sourceAnswersJson?: string
 }
 
 const testProviderRequests = new WeakMap<

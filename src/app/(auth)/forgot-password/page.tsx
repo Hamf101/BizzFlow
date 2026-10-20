@@ -23,7 +23,7 @@ export default async function ForgotPasswordPage({
   const params = await searchParams
   const flashError = readSignedFlash(params).error
   const backToLogIn = (
-    <Link className="text-sm font-medium text-primary underline-offset-4 hover:underline" href="/login">
+    <Link className="-my-3 inline-block py-3 text-sm font-medium text-primary underline-offset-4 hover:underline" href="/login">
       Back to log in
     </Link>
   )

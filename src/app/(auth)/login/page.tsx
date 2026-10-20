@@ -2,7 +2,7 @@ import Link from "next/link"
 
 import { PasswordInput } from "@/components/auth/password-input"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { readSignedFlash } from "@/lib/form-utils"
@@ -31,7 +31,7 @@ export default async function LoginPage({
         <>
           <span className="text-sm text-muted-foreground">New to BizFlow?</span>
           <Link
-            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+            className="-my-3 inline-block py-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
             href="/signup"
           >
             Sign up
@@ -71,7 +71,7 @@ export default async function LoginPage({
             <div className="flex items-center justify-between gap-3">
               <FieldLabel htmlFor="password">Password</FieldLabel>
               <Link
-                className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                className="-my-3 inline-block py-3 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 href="/forgot-password"
               >
                 Forgot password?
@@ -86,9 +86,9 @@ export default async function LoginPage({
             />
           </Field>
         </FieldGroup>
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full" pendingText="Logging in…">
           Log in
-        </Button>
+        </SubmitButton>
       </form>
     </AuthPageCard>
   )

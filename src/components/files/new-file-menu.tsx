@@ -1,8 +1,8 @@
 "use client"
 
-import { FilePlus2, FolderPlus, Plus } from "lucide-react"
+import { FilePlus2, FileSpreadsheet, FolderPlus, Plus } from "lucide-react"
 import Link from "next/link"
-import { type ReactElement, useState } from "react"
+import { type ReactElement, useState, useTransition } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -30,27 +30,34 @@ export type NewFolderForm = {
 }
 
 /**
- * Starts something new in the current location: a document, or a folder named
- * in a small dialog.
+ * Starts something new in the current location: a document, a sheet that
+ * opens at once, or a folder named in a small dialog.
  *
- * @param props - Where a new document starts, and the folder form, when allowed.
+ * @param props - Where a new document starts, how to start a sheet, and the folder form, when allowed.
  * @returns The New button, its menu, and the folder dialog.
  */
 export function NewFileMenu({
   addDocumentHref,
   newFolder,
+  createSheet,
+  folderId,
 }: {
   addDocumentHref: string | null
   newFolder: NewFolderForm | null
+  /** The server action that starts an empty sheet in a folder and opens it. */
+  createSheet: ((folderId: string | null) => Promise<void>) | null
+  /** Where a new sheet goes: the open folder, or null for the top of Files. */
+  folderId: string | null
 }): ReactElement {
   const [naming, setNaming] = useState(false)
+  const [starting, startSheet] = useTransition()
 
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button className="h-11 rounded-[12px] px-4 font-normal" type="button">
+            <Button className="h-11 rounded-lg px-4 font-normal" type="button">
               <Plus aria-hidden="true" data-icon="inline-start" />
               <span className="max-sm:sr-only">New</span>
             </Button>
@@ -61,6 +68,12 @@ export function NewFileMenu({
             <DropdownMenuItem render={<Link href={addDocumentHref} />}>
               <FilePlus2 aria-hidden="true" />
               Document
+            </DropdownMenuItem>
+          ) : null}
+          {createSheet ? (
+            <DropdownMenuItem disabled={starting} onClick={() => startSheet(() => createSheet(folderId))}>
+              <FileSpreadsheet aria-hidden="true" />
+              Sheet
             </DropdownMenuItem>
           ) : null}
           {newFolder ? (

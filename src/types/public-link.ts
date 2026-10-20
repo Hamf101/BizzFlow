@@ -18,6 +18,8 @@ export type PublicFormLink = {
   documentId: string | null
   /** Their place in the send (the k-th person listed); 1 on a link for anyone. answeringSigner says whose boxes that is. */
   signer: number
+  /** Where it is used, as its manager named it; null when unnamed. */
+  label: string | null
   status: PublicFormLinkStatus
   expiresAt: string | null
   maxSubmissions: number | null
@@ -47,6 +49,7 @@ export function parsePublicFormLinkRow(row: unknown): PublicFormLink {
   const recipientEmail = typeof record.recipient_email === "string" ? record.recipient_email : null
   const documentId = typeof record.document_id === "string" ? record.document_id : null
   const signer = typeof record.signer === "number" ? record.signer : 1
+  const label = typeof record.label === "string" ? record.label : null
   // A status this build does not know must not open the form to anyone.
   const status = PUBLIC_FORM_LINK_STATUSES.includes(record.status as PublicFormLinkStatus)
     ? (record.status as PublicFormLinkStatus)
@@ -66,6 +69,7 @@ export function parsePublicFormLinkRow(row: unknown): PublicFormLink {
     recipientEmail,
     documentId,
     signer,
+    label,
     status,
     expiresAt,
     maxSubmissions,
