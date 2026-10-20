@@ -143,6 +143,27 @@ export function pasteCells(content: SheetContent, tabId: string, at: Point, bloc
   return withCells(content, tabId, updates)
 }
 
+/**
+ * Puts a cut block down with its top-left at `at`, as Excel's cut does: its
+ * formulas land as written, and every reference that read inside where it was
+ * cut from, on any tab, follows it there.
+ *
+ * @param from - Where on this tab the block was cut from, already cleared.
+ */
+export function moveCells(content: SheetContent, tabId: string, from: Range, at: Point, block: ReadonlyArray<ReadonlyArray<SheetCell | null>>): SheetContent {
+  const target = content.tabs.find((tab) => tab.id === tabId)
+  if (!target) return content
+  const within = (ref: Point) => ref.row >= from.top && ref.row <= from.bottom && ref.col >= from.left && ref.col <= from.right
+  const follow = <T extends Point>(ref: T): T => ({ ...ref, row: ref.row + at.row - from.top, col: ref.col + at.col - from.left })
+
+  return rewriteFormulas(pasteCells(content, tabId, at, block), (tab, reference) => {
+    if (!readsTab(tab, reference, target) || !within(reference.first) || !within(reference.last ?? reference.first)) return reference
+    const first = follow(reference.first)
+    const last = reference.last && follow(reference.last)
+    return isInGrid(first.row, first.col) && (!last || isInGrid(last.row, last.col)) ? { ...reference, first, last } : null
+  })
+}
+
 /** Tab-separated text as Excel and Google Sheets put it on the clipboard: fields with tabs, line breaks or quotes are quoted. */
 export function parseTsv(text: string): string[][] {
   const rows: string[][] = [[]]

@@ -35,10 +35,10 @@ it("starts an empty sheet in the open folder and opens it", async () => {
   expect(createSheet).toHaveBeenCalledWith({ actorUserId: "user-1", folderId: FOLDER_ID, organizationId: ORG_ID, title: "Untitled sheet" })
 })
 
-it("saves a new name first, then the cells over the version the rename left", async () => {
+it("saves a new name and the cells in one write, so a refused save leaves neither", async () => {
   const result = await saveSheetAction({ content: { version: 1 }, documentId: "sheet-1", expectedUpdatedAt: "v1", title: "Q3" })
 
   expect(result).toEqual({ ok: true, version: "v3" })
-  expect(renameSheet).toHaveBeenCalledWith(expect.objectContaining({ expectedUpdatedAt: "v1", title: "Q3" }))
-  expect(updateSheetContent).toHaveBeenCalledWith(expect.objectContaining({ content: { version: 1 }, expectedUpdatedAt: "v2", organizationId: ORG_ID }))
+  expect(renameSheet).not.toHaveBeenCalled()
+  expect(updateSheetContent).toHaveBeenCalledWith(expect.objectContaining({ content: { version: 1 }, expectedUpdatedAt: "v1", organizationId: ORG_ID, title: "Q3" }))
 })

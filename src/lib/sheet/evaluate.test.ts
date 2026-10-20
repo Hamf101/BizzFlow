@@ -93,6 +93,8 @@ describe("errors", () => {
     ["SQRT(-1)", "#NUM!"],
     ["0^0", "#NUM!"],
     ["10^400", "#NUM!"],
+    ["SUM(1e308,1e308)", "#NUM!"],
+    ["1e309", "#ERROR!"],
     ["1+", "#ERROR!"],
     ["(1", "#ERROR!"],
     ['"open', "#ERROR!"],

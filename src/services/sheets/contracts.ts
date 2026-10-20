@@ -19,6 +19,8 @@ export type UpdateSheetContentInput = SheetInput & {
   content: unknown
   /** The updatedAt the writer opened; a save over anyone else's is refused. */
   expectedUpdatedAt: string
+  /** A new name saved in the same write, so the two stand or fall together. */
+  title?: string
 }
 
 export type RenameSheetInput = SheetInput & { title: string; expectedUpdatedAt: string }

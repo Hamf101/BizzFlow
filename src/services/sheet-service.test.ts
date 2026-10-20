@@ -70,12 +70,13 @@ describe("sheet service", () => {
     const { as, client, deps } = setUp()
     const content = book({ A1: 2, A2: "=A1*3" })
 
-    const saved = await updateSheetContent({ ...as("user-1"), content, expectedUpdatedAt: STAMP }, deps)
+    const saved = await updateSheetContent({ ...as("user-1"), content, expectedUpdatedAt: STAMP, title: "Budget" }, deps)
 
     expect(saved.updatedAt).not.toBe(STAMP)
-    expect(client.tables.documents.find((row) => row.id === "sheet-1")?.sheet_content).toEqual(content)
-    // Saved over by someone else since it was opened.
-    await expect(updateSheetContent({ ...as("user-1"), content, expectedUpdatedAt: STAMP }, deps)).rejects.toMatchObject({ statusCode: 409 })
+    expect(client.tables.documents.find((row) => row.id === "sheet-1")).toMatchObject({ sheet_content: content, title: "Budget" })
+    // Saved over by someone else since it was opened: neither a new name nor the cells land.
+    await expect(updateSheetContent({ ...as("user-1"), content: book({ A1: 9 }), expectedUpdatedAt: STAMP, title: "Q3" }, deps)).rejects.toMatchObject({ statusCode: 409 })
+    expect(client.tables.documents.find((row) => row.id === "sheet-1")).toMatchObject({ sheet_content: content, title: "Budget" })
     await expect(updateSheetContent({ ...as("guest-editor"), content, expectedUpdatedAt: saved.updatedAt }, deps)).resolves.toBeTruthy()
     for (const viewer of ["viewer-1", "guest-viewer"]) {
       await expect(updateSheetContent({ ...as(viewer), content, expectedUpdatedAt: STAMP }, deps)).rejects.toMatchObject({ statusCode: 403 })

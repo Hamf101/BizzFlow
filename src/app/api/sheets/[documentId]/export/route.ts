@@ -1,7 +1,9 @@
+import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 
 import { exportFilename } from "@/app/api/documents/_export"
 import { getAuthenticatedUser } from "@/lib/auth"
+import { readTimeZone, TIME_ZONE_COOKIE } from "@/lib/date-format"
 import { createCsvDownloadResponse, createCsvExportErrorResponse, escapeCsvField } from "@/lib/csv"
 import { resolveDocumentOrganizationId } from "@/lib/document-organization"
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
@@ -46,7 +48,10 @@ export async function GET(request: Request, context: SheetExportRouteContext): P
     const sheet = await getSheet({ actorUserId: user.id, organizationId, documentId })
     const tab = sheet.content.tabs.find((candidate) => candidate.id === query.get("tab")) ?? sheet.content.tabs[0]!
 
-    return createCsvDownloadResponse(sheetCsv(sheet.content, tab.id), exportFilename(sheet.title, "csv"))
+    // Worked out in the viewer's time zone, as the grid is, so TODAY() and NOW() match it.
+    const timeZone = readTimeZone((await cookies()).get(TIME_ZONE_COOKIE)?.value)
+
+    return createCsvDownloadResponse(sheetCsv(sheet.content, tab.id, timeZone), exportFilename(sheet.title, "csv"))
   } catch (error: unknown) {
     if (error instanceof RateLimitError) {
       return createRateLimitResponse(error, "sheet_export_rejected", "sheets_export")
@@ -61,9 +66,9 @@ export async function GET(request: Request, context: SheetExportRouteContext): P
 }
 
 // The tab from A1 to its last filled row and column.
-function sheetCsv(content: SheetContent, tabId: string): string {
+function sheetCsv(content: SheetContent, tabId: string, timeZone: string): string {
   const tab = content.tabs.find((candidate) => candidate.id === tabId)!
-  const { values } = evaluateSheet(content, { now: new Date() })
+  const { values } = evaluateSheet(content, { now: new Date(), timeZone })
   let rows = 0
   let cols = 0
 

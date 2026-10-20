@@ -25,7 +25,7 @@ type ExportLinks = Readonly<{
  *
  * @param base - Its API address, such as `/api/documents/<id>`.
  * @param options - Whether a PDF (default) and a fillable PDF are offered, and the original upload's address;
- *   for a sheet, CSV, with Excel only when `xlsx` is set.
+ *   for a sheet, CSV, with Excel only when `xlsx` is set, of the `tab` given.
  * @returns The links, in menu order.
  */
 export function exportLinks(
@@ -35,15 +35,17 @@ export function exportLinks(
     original,
     pdf = true,
     sheet = false,
+    tab,
     xlsx = false,
-  }: { fillable?: boolean; original?: string; pdf?: boolean; sheet?: boolean; xlsx?: boolean } = {}
+  }: { fillable?: boolean; original?: string; pdf?: boolean; sheet?: boolean; tab?: string; xlsx?: boolean } = {}
 ): ExportLinks {
   // A sheet saves as a spreadsheet: CSV, and Excel once `xlsx` is passed.
   if (sheet) {
+    const which = tab ? `&tab=${encodeURIComponent(tab)}` : ""
     return {
       formats: [
-        ...(xlsx ? [{ href: `${base}/export?format=xlsx`, icon: FileSpreadsheet, label: "Excel (.xlsx)" }] : []),
-        { href: `${base}/export?format=csv`, icon: FileText, label: "CSV" },
+        ...(xlsx ? [{ href: `${base}/export?format=xlsx${which}`, icon: FileSpreadsheet, label: "Excel (.xlsx)" }] : []),
+        { href: `${base}/export?format=csv${which}`, icon: FileText, label: "CSV" },
       ],
     }
   }

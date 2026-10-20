@@ -9,6 +9,9 @@ import { GET } from "./route"
 
 const SHEET_ID = "30000000-0000-4000-8000-000000000001"
 
+const timeZone = vi.hoisted(() => ({ value: undefined as string | undefined }))
+
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => (timeZone.value ? { value: timeZone.value } : undefined) }) }))
 vi.mock("@/lib/auth", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/auth")>()), getAuthenticatedUser: vi.fn() }))
 vi.mock("@/lib/document-organization", () => ({ resolveDocumentOrganizationId: vi.fn() }))
 vi.mock("@/lib/rate-limit", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/rate-limit")>()), checkRateLimit: vi.fn() }))
@@ -20,6 +23,7 @@ vi.mock("@/services/sheet-service", async (importOriginal) => ({
 const download = (query = "format=csv") => GET(new Request(`http://localhost/api/sheets/${SHEET_ID}/export?${query}`), { params: Promise.resolve({ documentId: SHEET_ID }) })
 
 beforeEach(() => {
+  timeZone.value = undefined
   vi.mocked(getAuthenticatedUser).mockResolvedValue({ id: "user-1", email: "member@example.com" })
   vi.mocked(resolveDocumentOrganizationId).mockResolvedValue("org-1")
 })
@@ -58,4 +62,17 @@ it("refuses whoever may not open the sheet, saying no more than that", async () 
 
   expect([response.status, await response.text()]).toEqual([404, "Sheet was not found."])
   expect((await download("format=xlsx")).status).toBe(400)
+})
+
+it("downloads the tab asked for, worked out in the viewer's time zone", async () => {
+  vi.useFakeTimers({ now: new Date("2026-10-19T23:30:00.000Z"), toFake: ["Date"] })
+  const content = book({ A1: "=DAY(TODAY())" })
+  content.tabs.push({ ...content.tabs[0]!, id: "tab-2", name: "Second", cells: { A1: { v: "second" } } })
+  vi.mocked(getSheet).mockResolvedValue({ accessLevel: "viewer", content, folderId: null, id: SHEET_ID, lifecycleState: "active", title: "Q3", updatedAt: "2026-10-14T12:00:00.000Z" })
+  timeZone.value = "Pacific/Kiritimati"
+
+  // Already the 20th there, though the server's clock reads the 19th.
+  expect(await (await download()).text()).toBe('"20"')
+  expect(await (await download("format=csv&tab=tab-2")).text()).toBe('"second"')
+  vi.useRealTimers()
 })

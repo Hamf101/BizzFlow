@@ -94,7 +94,9 @@ const sum = (values: number[]) => Number(values.reduce((total, value) => total.p
 function aggregate(run: (values: number[]) => Result) {
   return fn(1, MANY, (args) => {
     const values = numbersOf(args)
-    return isError(values) ? values : run(values)
+    if (isError(values)) return values
+    const result = run(values)
+    return typeof result === "number" ? finiteOr(result) : result
   })
 }
 

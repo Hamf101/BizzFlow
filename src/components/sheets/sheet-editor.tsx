@@ -42,6 +42,7 @@ import {
   deleteTab,
   fillDown,
   formatCells,
+  moveCells,
   moveLines,
   parseTsv,
   pasteCells,
@@ -62,7 +63,8 @@ import { MAX_SHEET_FORMULA_LENGTH, parseSheetContent, type SheetCell, type Sheet
 
 type SheetPage = { content: SheetContent; title: string }
 type Editing = { address: string; tabId: string; text: string; where: "bar" | "cell" | "dock" }
-type Clip = { cells: (SheetCell | null)[][]; from: Point; tsv: string }
+// What was copied here; a cut also says where from, so pasting moves it rather than copying.
+type Clip = { cells: (SheetCell | null)[][]; cut?: { range: Range; tabId: string }; from: Point; tsv: string }
 
 const MAX_TABS = 10
 // Each reference in the selected formula, in its own colour, in the bar and on the grid.
@@ -162,6 +164,9 @@ export function SheetEditor({ backHref, canEdit, canShare, guest, organizationId
   }
 
   function select(anchor: Point, focus: Point): void {
+    // Choosing another cell keeps what was typed into the last one, as on a phone's dock.
+    const current = editingRef.current
+    if (current && (current.tabId !== tab.id || current.address !== cellAddress(focus.row, focus.col))) commit()
     setSelection({ anchor, focus })
   }
 
@@ -197,10 +202,11 @@ export function SheetEditor({ backHref, canEdit, canShare, guest, organizationId
   function startEditing(text: string | null, where: Editing["where"]): void {
     if (!canEdit) return
     // Typing in the cell, then clicking the formula bar, carries on there.
-    if (editingRef.current) {
+    if (editingRef.current?.address === active && editingRef.current.tabId === tab.id) {
       setEditing({ ...editingRef.current, where })
       return
     }
+    commit()
     setEditing({ address: active, tabId: tab.id, text: text ?? cellInput(activeCell), where })
   }
 
@@ -231,7 +237,10 @@ export function SheetEditor({ backHref, canEdit, canShare, guest, organizationId
     const tsv = toTsv(text)
     event.clipboardData.setData("text/plain", tsv)
     clip.current = { cells, from: { row: range.top, col: range.left }, tsv }
-    if (cut && canEdit) clearRange()
+    if (cut && canEdit) {
+      clip.current.cut = { range, tabId: tab.id }
+      clearRange()
+    }
   }
 
   function paste(event: ClipboardEvent): void {
@@ -245,7 +254,15 @@ export function SheetEditor({ backHref, canEdit, canShare, guest, organizationId
     const block = ours
       ? ours.cells
       : parseTsv(text).map((line, rows) => line.map((field, cols) => typedCell(field, tab.cells[cellAddress(at.row + rows, at.col + cols)]?.fmt)))
-    change((current) => pasteCells(current, tab.id, at, block, ours?.from))
+    if (ours?.cut) {
+      const cut = ours.cut
+      // ponytail: cut to another tab lands as written but leaves what read it behind; follow it there too if asked
+      change((current) => (cut.tabId === tab.id ? moveCells(current, tab.id, cut.range, at, block) : pasteCells(current, tab.id, at, block)))
+      // A cut goes down once; pasting it again copies it from where it now is.
+      clip.current = { cells: ours.cells, from: at, tsv: ours.tsv }
+    } else {
+      change((current) => pasteCells(current, tab.id, at, block, ours?.from))
+    }
     const height = block.length
     const width = Math.max(...block.map((line) => line.length))
     select(at, { row: Math.min(1999, at.row + height - 1), col: Math.min(51, at.col + width - 1) })
@@ -320,7 +337,7 @@ export function SheetEditor({ backHref, canEdit, canShare, guest, organizationId
     change(() => next)
   }
 
-  const exports = exportLinks(`/api/sheets/${encodeURIComponent(sheet.id)}`, { sheet: true })
+  const exports = exportLinks(`/api/sheets/${encodeURIComponent(sheet.id)}`, { sheet: true, tab: tab.id })
   const stats = summarize(tab, range, values)
   const conflict = autosave.status === "conflict"
 

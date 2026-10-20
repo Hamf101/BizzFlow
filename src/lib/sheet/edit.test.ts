@@ -1,6 +1,6 @@
 import { expect, it } from "vitest"
 
-import { deleteTab, moveLines, parseTsv, renameTab } from "@/lib/sheet/edit"
+import { deleteTab, moveCells, moveLines, parseTsv, renameTab } from "@/lib/sheet/edit"
 import { book } from "@/lib/sheet/sheet.test-support"
 
 it("keeps every formula on its cells when rows come and go, as Excel does", () => {
@@ -30,4 +30,14 @@ it("reads Excel's clipboard, quoted fields included", () => {
     ["Name", "Note"],
     ["Ada", 'says "hi"\nthen leaves'],
   ])
+})
+
+it("moves a cut cell's formula as written, and points what read it at its new place", () => {
+  // B1 was cut, so it is already empty; C1 is where it goes.
+  const sheet = book({ A1: 5, D1: "=B1+1" }, { Other: { A1: "=Sheet1!B1" } })
+
+  const moved = moveCells(sheet, "t1", { top: 0, left: 1, bottom: 0, right: 1 }, { row: 0, col: 2 }, [[{ f: "A1*2" }]])
+
+  expect(moved.tabs[0]!.cells).toMatchObject({ C1: { f: "A1*2" }, D1: { f: "C1+1" } })
+  expect(moved.tabs[1]!.cells.A1).toEqual({ f: "Sheet1!C1" })
 })

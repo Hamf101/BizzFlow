@@ -43,7 +43,7 @@ export async function createSheetAction(folderId: string | null): Promise<void> 
 
 /**
  * Saves a sheet from its editor, a member's or a guest Editor's, without
- * leaving the page. A rename goes first, so the cells save over its version.
+ * leaving the page. A new name and new cells save in one write.
  *
  * @param input - The sheet, the version the editor holds, and what changed.
  * @returns The version to save from next, or why the save was refused.
@@ -59,15 +59,15 @@ export async function saveSheetAction(input: SheetSaveInput): Promise<SaveResult
     }
 
     const target = { actorUserId: user.id, organizationId, documentId }
-    let version = String(input.expectedUpdatedAt ?? "")
-
-    if (typeof input.title === "string") {
-      version = (await renameSheet({ ...target, title: input.title, expectedUpdatedAt: version })).updatedAt
-    }
-
-    if (input.content !== undefined) {
-      version = (await updateSheetContent({ ...target, content: input.content, expectedUpdatedAt: version })).updatedAt
-    }
+    const expectedUpdatedAt = String(input.expectedUpdatedAt ?? "")
+    const title = typeof input.title === "string" ? input.title : undefined
+    // A new name and new cells go in one write, so a refused save leaves neither behind.
+    const { updatedAt: version } =
+      input.content !== undefined
+        ? await updateSheetContent({ ...target, content: input.content, expectedUpdatedAt, title })
+        : title !== undefined
+          ? await renameSheet({ ...target, title, expectedUpdatedAt })
+          : { updatedAt: expectedUpdatedAt }
 
     revalidatePath("/documents")
     return { ok: true, version }

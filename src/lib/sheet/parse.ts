@@ -92,7 +92,9 @@ function tokenize(source: string): Token[] {
       at += code.length
       tokens.push({ t: "err", v: code, s, e: at })
     } else if (/[0-9.]/.test(char)) {
-      tokens.push({ t: "num", v: Number(sticky(NUMBER)), s, e: at })
+      const value = Number(sticky(NUMBER))
+      if (!Number.isFinite(value)) throw new FormulaSyntaxError(`The number at ${s + 1} is too large.`)
+      tokens.push({ t: "num", v: value, s, e: at })
     } else if (char === "'") {
       const sheet = quoted("'", "A tab name")
       if (source[at] !== "!") throw new FormulaSyntaxError("A quoted tab name must be followed by !.")

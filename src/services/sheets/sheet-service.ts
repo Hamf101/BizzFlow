@@ -161,7 +161,7 @@ export async function isSheetDocument(input: { organizationId: string; documentI
 /**
  * Saves a sheet's content over the version its writer opened.
  *
- * @param input - Actor, organization, sheet, untrusted content and the opened version stamp.
+ * @param input - Actor, organization, sheet, untrusted content, any new name, and the opened version stamp.
  * @param deps - Injected client and clock for tests.
  * @returns The new version stamp.
  * @throws SheetServiceError 400 for content past a cap, 422 when it is too heavy to work out,
@@ -189,7 +189,11 @@ export async function updateSheetContent(
       throw error
     }
 
-    return writeSheet(client, input, { sheet_content: content, updated_by: input.actorUserId })
+    return writeSheet(client, input, {
+      sheet_content: content,
+      ...(input.title === undefined ? {} : { title: normalizeTitle(input.title) }),
+      updated_by: input.actorUserId,
+    })
   })
 }
 

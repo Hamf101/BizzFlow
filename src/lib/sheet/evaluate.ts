@@ -147,8 +147,9 @@ class Workbook {
   }
 
   private finish(tab: TabState, node: FormulaNode): CellValue {
-    // A formula that reads an empty cell shows 0, as in Excel.
-    return scalar(this.evaluate(tab, node)) ?? 0
+    // A formula that reads an empty cell shows 0, as in Excel; a number past what a sheet holds is #NUM!.
+    const value = scalar(this.evaluate(tab, node)) ?? 0
+    return typeof value === "number" && !Number.isFinite(value) ? sheetError("#NUM!") : value
   }
 
   /** The formula cells a formula reads, as book-wide ids. */
