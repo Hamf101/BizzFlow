@@ -2,7 +2,6 @@
 
 import { Plus, Send, X } from "lucide-react"
 import {
-  type ChangeEvent,
   type ReactElement,
   useRef,
   useState,
@@ -11,7 +10,7 @@ import { useFormStatus } from "react-dom"
 
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import { PersonSearchField } from "@/components/people/person-search-field"
 
 const MAX_RECIPIENTS = 20
 
@@ -88,34 +87,15 @@ export function DocumentRecipientCollection({
       <div className="grid gap-3">
         {recipients.map((recipient: RecipientDraft, index: number) => (
           <div
-            className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto]"
+            className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"
             key={recipient.clientId}
           >
+            {/* One field: someone from the workspace, or anyone by email. */}
             <Field>
-              <FieldLabel htmlFor={`${recipient.clientId}-name`}>Name</FieldLabel>
-              <Input
-                autoComplete="name"
-                id={`${recipient.clientId}-name`}
-                maxLength={160}
-                onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-                  updateRecipient(recipient.clientId, { name: event.target.value })
-                }
-                required
-                value={recipient.name}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor={`${recipient.clientId}-email`}>Email</FieldLabel>
-              <Input
-                autoComplete="email"
-                id={`${recipient.clientId}-email`}
-                maxLength={320}
-                onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-                  updateRecipient(recipient.clientId, { email: event.target.value })
-                }
-                required
-                type="email"
-                value={recipient.email}
+              <FieldLabel htmlFor={`${recipient.clientId}-person`}>Recipient {index + 1}</FieldLabel>
+              <PersonSearchField
+                id={`${recipient.clientId}-person`}
+                onPersonChange={(person) => updateRecipient(recipient.clientId, { email: person?.email ?? "", name: person?.name ?? "" })}
               />
             </Field>
             <Button

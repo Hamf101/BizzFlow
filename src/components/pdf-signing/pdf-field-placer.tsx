@@ -37,7 +37,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { readSignerPerson, SignerPersonField } from "@/components/pdf-signing/signer-person-field"
+import { PersonSearchField, readPersonChoice } from "@/components/people/person-search-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SubmitButton } from "@/components/ui/submit-button"
@@ -540,7 +540,7 @@ function SendDialog({
           <form
             action={async (formData: FormData) => {
               // The fields as they are now are what everyone signs.
-              const people = layout.signers.map((signer) => ({ person: readSignerPerson(String(formData.get(`person-${signer.id}`) ?? "")), signer }))
+              const people = layout.signers.map((signer) => ({ person: readPersonChoice(String(formData.get(`person-${signer.id}`) ?? "")), signer }))
               const unknown = people.find(({ person }) => !person)
               if (unknown) return setError(`Choose someone for ${unknown.signer.name} from the list, or type their email.`)
               if (!(await flush())) return setError("Your latest changes didn't save. Try again in a moment.")
@@ -557,7 +557,7 @@ function SendDialog({
                   <span aria-hidden="true" className="size-2 rounded-full bg-(--tone)" />
                   {signer.name}
                 </span>
-                <SignerPersonField label={`Who signs as ${signer.name}`} name={`person-${signer.id}`} />
+                <PersonSearchField label={`Who signs as ${signer.name}`} name={`person-${signer.id}`} />
               </div>
             ))}
             {error ? (

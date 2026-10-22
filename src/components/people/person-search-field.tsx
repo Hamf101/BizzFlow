@@ -5,20 +5,20 @@ import { type ReactElement, useEffect, useState } from "react"
 
 import { Input } from "@/components/ui/input"
 
-/** Who fills a signer's fields: a name and the address their link goes to. */
-export type SignerPerson = Readonly<{ email: string; name: string }>
+/** Someone chosen to receive something: a name and the address it goes to. */
+export type PersonChoice = Readonly<{ email: string; name: string }>
 
 const EMAIL = /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/
 const PICKED = /^(.+?)\s*<([^<>]+)>$/
 
 /**
- * Reads the one signer field: someone picked from the workspace, shown as
+ * Reads a person field: someone picked from the workspace, shown as
  * "Name <email>", or anyone else by their email address alone.
  *
  * @param text - What the field holds.
  * @returns The person, or null when it is neither.
  */
-export function readSignerPerson(text: string): SignerPerson | null {
+export function readPersonChoice(text: string): PersonChoice | null {
   const value = text.trim()
   const picked = PICKED.exec(value)
 
@@ -31,15 +31,27 @@ export function readSignerPerson(text: string): SignerPerson | null {
 }
 
 /**
- * One field to choose who signs: typing shows matching people from the
- * workspace, the ones the sender may see, and an email address reaches anyone else.
+ * One field to choose a person: typing shows matching people from the
+ * workspace, the ones the sender may see, and an email address reaches
+ * anyone else. "Name <email>" names someone from outside.
  *
- * @param props - The signer's role, as the field's name to assistive tech, and the form field's name.
+ * @param props - Its accessible name or the id a label points at, the form field's name, and who hears each change.
  * @returns The field.
  */
-export function SignerPersonField({ label, name }: { label: string; name: string }): ReactElement {
+export function PersonSearchField({
+  id,
+  label,
+  name,
+  onPersonChange,
+}: {
+  id?: string
+  label?: string
+  name?: string
+  /** Hears the person the field now reads as, or null while it reads as nobody yet. */
+  onPersonChange?: (person: PersonChoice | null) => void
+}): ReactElement {
   const [text, setText] = useState("")
-  const [people, setPeople] = useState<readonly SignerPerson[]>([])
+  const [people, setPeople] = useState<readonly PersonChoice[]>([])
   const [open, setOpen] = useState(false)
   const query = text.trim()
   // A person already picked, or an address typed in full, needs no search and no suggestions.
@@ -75,22 +87,25 @@ export function SignerPersonField({ label, name }: { label: string; name: string
   return (
     <Autocomplete.Root
       filter={null}
-      itemToStringValue={(person: SignerPerson) => `${person.name} <${person.email}>`}
+      itemToStringValue={(person: PersonChoice) => `${person.name} <${person.email}>`}
       items={searching ? people : []}
       // Open only with someone to offer, and never hiding the rest of the form while it is.
       modal={false}
       name={name}
       onOpenChange={setOpen}
-      onValueChange={setText}
+      onValueChange={(next: string) => {
+        setText(next)
+        onPersonChange?.(readPersonChoice(next))
+      }}
       open={open && searching && people.length > 0}
       value={text}
     >
-      <Autocomplete.Input render={<Input aria-label={label} autoComplete="off" maxLength={300} placeholder="Name or email" required />} />
+      <Autocomplete.Input render={<Input aria-label={label} autoComplete="off" id={id} maxLength={300} placeholder="Name or email" required />} />
       <Autocomplete.Portal>
         <Autocomplete.Positioner className="z-[60] outline-none" sideOffset={4}>
           <Autocomplete.Popup className="max-h-[min(16rem,var(--available-height))] w-[var(--anchor-width)] origin-[var(--transform-origin)] overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none transition-[scale,opacity] duration-100 data-empty:hidden data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
             <Autocomplete.List>
-              {(person: SignerPerson) => (
+              {(person: PersonChoice) => (
                 <Autocomplete.Item
                   className="flex cursor-default flex-col rounded-md px-2.5 py-2 text-sm outline-none select-none data-highlighted:bg-muted md:py-1.5"
                   key={person.email}

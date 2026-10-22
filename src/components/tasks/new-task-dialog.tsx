@@ -15,10 +15,10 @@ import {
 import { DateTimePicker } from "@/components/ui/date-picker"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { memberLabel } from "@/components/people/member-name"
+import { memberOptions } from "@/components/people/member-name"
 import type { OrganizationMember } from "@/types/organization"
+import { SearchSelect } from "@/components/ui/search-select"
 
 /**
  * Opens the new-task form in a dialog, like People's invite, so the list
@@ -74,14 +74,7 @@ export function NewTaskDialog({
             {canAssign ? (
               <Field className="sm:flex-1">
                 <FieldLabel htmlFor="new-task-assignee">Assignee</FieldLabel>
-                <Select defaultValue="" id="new-task-assignee" name="assignedTo">
-                  <option value="">Unassigned</option>
-                  {members.map((member: OrganizationMember) => (
-                    <option key={member.id} value={member.userId}>
-                      {memberLabel(member)}
-                    </option>
-                  ))}
-                </Select>
+                <SearchSelect defaultValue="" emptyLabel="Unassigned" id="new-task-assignee" name="assignedTo" options={memberOptions(members)} />
               </Field>
             ) : null}
           </div>

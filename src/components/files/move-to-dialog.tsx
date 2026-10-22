@@ -6,6 +6,7 @@ import { type ReactElement, useState, useTransition } from "react"
 import { moveFilesAction } from "@/app/(dashboard)/documents/actions"
 import type { SelectableFile } from "@/components/files/file-selection"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -47,9 +48,13 @@ export function MoveToDialog({
   open: boolean
 }): ReactElement {
   const [browsing, setBrowsing] = useState<string | null>(folderId)
+  const [query, setQuery] = useState("")
   const [, startTransition] = useTransition()
   const allowed = withoutOwnBranch(destinations, items)
   const here = childrenOf(browsing, allowed)
+  const words = query.trim().toLowerCase()
+  // Searching looks through every folder, wherever it is, not just this one's.
+  const found = words ? allowed.filter((folder) => folder.name.toLowerCase().includes(words)).slice(0, 30) : null
 
   function move(destinationFolderId: string | null): void {
     onOpenChange(false)
@@ -93,6 +98,33 @@ export function MoveToDialog({
             {browsing === null ? TOP : pathOf(byId(browsing, destinations), destinations)}
           </span>
         </div>
+        {allowed.length > 6 ? (
+          <Input aria-label="Search folders" onChange={(event) => setQuery(event.target.value)} placeholder="Search folders" type="search" value={query} />
+        ) : null}
+        {found ? (
+          <ul className="-mx-1 max-h-72 min-h-40 overflow-y-auto px-1">
+            {found.map((folder: MoveDestination) => (
+              <li key={folder.id}>
+                <button
+                  className={ROW}
+                  onClick={() => {
+                    setBrowsing(folder.id)
+                    setQuery("")
+                  }}
+                  type="button"
+                >
+                  <Folder aria-hidden="true" className="size-4 text-muted-foreground" />
+                  <span className="flex min-w-0 flex-col items-start">
+                    <span className="max-w-full truncate">{folder.name}</span>
+                    <span className="max-w-full truncate text-xs text-muted-foreground">{pathOf(folder, destinations)}</span>
+                  </span>
+                  <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground" />
+                </button>
+              </li>
+            ))}
+            {found.length === 0 ? <li className="px-2.5 py-2 text-sm text-muted-foreground">No folder is called that.</li> : null}
+          </ul>
+        ) : (
         <ul className="-mx-1 max-h-72 min-h-40 overflow-y-auto px-1">
           {here.map((folder: MoveDestination) => (
             <li key={folder.id}>
@@ -107,6 +139,7 @@ export function MoveToDialog({
             <li className="px-2.5 py-2 text-sm text-muted-foreground">No folders here.</li>
           ) : null}
         </ul>
+        )}
         <div className="flex justify-end">
           <Button disabled={browsing === folderId} onClick={() => move(browsing)}>
             <FolderOpen aria-hidden="true" />

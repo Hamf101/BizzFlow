@@ -204,8 +204,8 @@ test.describe("signing", () => {
       const dialog = sender.getByRole("dialog", { name: "Send for signing" })
       await dialog.getByRole("button", { name: "Add recipient" }).click()
       for (const [index, signer] of signers.entries()) {
-        await dialog.getByLabel("Name").nth(index).fill(signer.name)
-        await dialog.getByLabel("Email").nth(index).fill(signer.email)
+        // One field each: a name and address together, as for someone outside the workspace.
+        await dialog.getByRole("combobox", { name: `Recipient ${index + 1}` }).fill(`${signer.name} <${signer.email}>`)
       }
       await dialog.getByRole("button", { exact: true, name: "Send" }).click()
       // E2E has no email, so the invitations are not delivered; the document

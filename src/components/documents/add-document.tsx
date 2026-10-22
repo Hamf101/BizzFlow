@@ -53,6 +53,10 @@ export function AddDocument({
 }): ReactElement {
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
+  const [query, setQuery] = useState("")
+  const words = query.trim().toLowerCase()
+  // A long list of templates narrows as you type their name; Upload and Blank stay.
+  const shownTemplates = words ? templates.filter((template) => template.title.toLowerCase().includes(words)) : templates
   const [uploading, setUploading] = useState(false)
 
   function chooseFile(event: ChangeEvent<HTMLInputElement>): void {
@@ -86,6 +90,16 @@ export function AddDocument({
 
   return (
     <>
+      {templates.length > 6 ? (
+        <Input
+          aria-label="Search templates"
+          className="mx-auto mb-5 max-w-sm"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search templates"
+          type="search"
+          value={query}
+        />
+      ) : null}
       <div className="flex flex-wrap justify-center gap-4 sm:gap-8">
         <label className={TILE}>
           <input
@@ -99,7 +113,7 @@ export function AddDocument({
         <OneClickForm action={createGeneratedDocumentAction} className={TILE} fields={{ folderId }}>
           <PageTile icon={<Plus />} label="Blank document" />
         </OneClickForm>
-        {templates.map((template: DocumentTemplateChoice) => (
+        {shownTemplates.map((template: DocumentTemplateChoice) => (
           <OneClickForm
             action={createGeneratedDocumentAction}
             className={TILE}

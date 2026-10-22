@@ -54,7 +54,7 @@ import {
   transitionTaskStatusAction,
   updateTaskAction,
 } from "../actions"
-import { formatMemberName, memberLabel } from "@/components/people/member-name"
+import { formatMemberName, memberOptions } from "@/components/people/member-name"
 import {
   getTaskStatusLabel,
   listInternalTaskMembers,
@@ -63,6 +63,7 @@ import {
   TaskStatusBadge,
 } from "@/components/tasks/task-presentation"
 import type { Metadata } from "next"
+import { SearchSelect } from "@/components/ui/search-select"
 
 type TaskDetailParams = Promise<{ taskId: string }>
 
@@ -347,18 +348,13 @@ function TaskAssignmentPanel({
             <Field>
               <FieldLabel htmlFor="task-assignee">Assignee</FieldLabel>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Select
+                <SearchSelect
                   defaultValue={task.assignedTo ?? ""}
+                  emptyLabel="Unassigned"
                   id="task-assignee"
                   name="assignedTo"
-                >
-                  <option value="">Unassigned</option>
-                  {members.map((member: OrganizationMember) => (
-                    <option key={member.id} value={member.userId}>
-                      {memberLabel(member)}
-                    </option>
-                  ))}
-                </Select>
+                  options={memberOptions(members)}
+                />
                 <Button type="submit" variant="outline">
                   <UserRoundCheck />
                   Save
@@ -508,21 +504,12 @@ function TaskRemindersPanel({
             <input name="taskId" type="hidden" value={task.id} />
             <Field>
               <FieldLabel htmlFor="reminder-recipient">Recipient</FieldLabel>
-              <Select
-                defaultValue={task.assignedTo ?? ""}
+              <SearchSelect
+                defaultValue={task.assignedTo ?? undefined}
                 id="reminder-recipient"
                 name="recipientUserId"
-                required
-              >
-                <option disabled value="">
-                  Choose a team member
-                </option>
-                {members.map((member: OrganizationMember) => (
-                  <option key={member.id} value={member.userId}>
-                    {memberLabel(member)}
-                  </option>
-                ))}
-              </Select>
+                options={memberOptions(members)}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="reminder-channel">Channel</FieldLabel>

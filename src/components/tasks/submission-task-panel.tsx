@@ -2,7 +2,7 @@ import { ListChecks, Plus } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement } from "react"
 
-import { formatMemberName, memberLabel } from "@/components/people/member-name"
+import { formatMemberName, memberOptions } from "@/components/people/member-name"
 import { TaskStatusBadge } from "@/components/tasks/task-presentation"
 import { LocalDate } from "@/components/ui/local-date"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -15,11 +15,11 @@ import {
 import { DateTimePicker } from "@/components/ui/date-picker"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import type { OrganizationMember } from "@/types/organization"
 import type { Task } from "@/types/task"
+import { SearchSelect } from "@/components/ui/search-select"
 
 type SubmissionTaskPanelProps = {
   /** Tasks already raised from this submission. */
@@ -148,18 +148,7 @@ export function SubmissionTaskPanel({
                       <FieldLabel htmlFor="submission-task-assignee">
                         Assignee
                       </FieldLabel>
-                      <Select
-                        defaultValue=""
-                        id="submission-task-assignee"
-                        name="assignedTo"
-                      >
-                        <option value="">Leave unassigned</option>
-                        {members.map((member: OrganizationMember) => (
-                          <option key={member.id} value={member.userId}>
-                            {memberLabel(member)}
-                          </option>
-                        ))}
-                      </Select>
+                      <SearchSelect defaultValue="" emptyLabel="Leave unassigned" id="submission-task-assignee" name="assignedTo" options={memberOptions(members)} />
                       <FieldDescription>
                         Emailed when the task is handed over.
                       </FieldDescription>

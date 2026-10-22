@@ -23,6 +23,7 @@ import type { OrganizationRole } from "@/lib/permissions"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
 import type { SubmissionActivityEvent, SubmissionComment, SubmissionReviewer, SubmissionReviewTally } from "@/types/submission-review"
+import { SearchChecklist } from "@/components/ui/search-checklist"
 
 // Anyone who reviews work can be named a reviewer, including people from outside.
 const eligibleReviewerRoles: readonly OrganizationRole[] = ["owner_admin", "manager", "external_reviewer"]
@@ -110,20 +111,12 @@ export function SubmissionReviewControls({
               <legend className="pb-1 text-sm font-medium">
                 {startsReview ? "Reviewers" : tally.total > 0 ? "Change reviewers" : "Add reviewers"}
               </legend>
-              {eligibleMembers.map((member: OrganizationMember) => (
-                <label className="flex items-center gap-2.5 text-sm" key={member.id}>
-                  <input
-                    className="size-4 accent-primary"
-                    defaultChecked={approvers.some((reviewer) => reviewer.userId === member.userId)}
-                    name="reviewerIds"
-                    type="checkbox"
-                    value={member.userId}
-                  />
-                  <span className="min-w-0 truncate">
-                    {memberLabel(member)} · {ROLE_LABELS[member.role]}
-                  </span>
-                </label>
-              ))}
+              <SearchChecklist
+                defaultChecked={approvers.map((reviewer) => reviewer.userId)}
+                label="Reviewers"
+                name="reviewerIds"
+                options={eligibleMembers.map((member) => ({ hint: ROLE_LABELS[member.role], label: memberLabel(member), value: member.userId }))}
+              />
             </fieldset>
             {eligibleMembers.length > 1 && (
               <div className="flex flex-col gap-1.5">
@@ -163,20 +156,12 @@ export function SubmissionReviewControls({
             <fieldset className="flex flex-col gap-1.5">
               <legend className="pb-1 text-sm font-medium">Share with</legend>
               <p className="pb-1 text-xs text-muted-foreground">They can read it, comment and ask for changes, but not approve.</p>
-              {shareable.map((member: OrganizationMember) => (
-                <label className="flex items-center gap-2.5 text-sm" key={member.id}>
-                  <input
-                    className="size-4 accent-primary"
-                    defaultChecked={reviewers.some((reviewer) => !reviewer.canApprove && reviewer.userId === member.userId)}
-                    name="sharedUserIds"
-                    type="checkbox"
-                    value={member.userId}
-                  />
-                  <span className="min-w-0 truncate">
-                    {memberLabel(member)} · {ROLE_LABELS[member.role]}
-                  </span>
-                </label>
-              ))}
+              <SearchChecklist
+                defaultChecked={reviewers.filter((reviewer) => !reviewer.canApprove).map((reviewer) => reviewer.userId)}
+                label="People to share with"
+                name="sharedUserIds"
+                options={shareable.map((member) => ({ hint: ROLE_LABELS[member.role], label: memberLabel(member), value: member.userId }))}
+              />
             </fieldset>
             <Button className="w-fit" type="submit" variant="outline">
               <UserRoundPlus />

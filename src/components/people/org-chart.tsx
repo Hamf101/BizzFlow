@@ -14,6 +14,7 @@ import { useMediaQuery } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import type { OrganizationStructure } from "@/services/organization-service"
 import type { OrganizationMember } from "@/types/organization"
+import { SearchSelect } from "@/components/ui/search-select"
 
 type Unit = OrganizationStructure["units"][number]
 type Change = (input: StructureChange) => Promise<{ error?: string }>
@@ -371,21 +372,16 @@ function PersonPanel({
 
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="text-muted-foreground">Reports to</span>
-        <Select
-          aria-label="Reports to"
+        <SearchSelect
           disabled={busy}
-          onChange={(event) => save([{ kind: "set_manager", managerUserId: event.target.value || null, userId: member.userId }])}
-          value={managers[member.userId] ?? ""}
-        >
-          <option value="">Nobody</option>
-          {members
+          emptyLabel="Nobody"
+          label="Reports to"
+          onValueChange={(managerUserId) => save([{ kind: "set_manager", managerUserId: managerUserId || null, userId: member.userId }])}
+          options={members
             .filter((other) => other.userId !== member.userId)
-            .map((other) => (
-              <option key={other.userId} value={other.userId}>
-                {name(other.userId)}
-              </option>
-            ))}
-        </Select>
+            .map((other) => ({ hint: other.email === name(other.userId) ? undefined : other.email, label: name(other.userId), value: other.userId }))}
+          value={managers[member.userId] ?? ""}
+        />
       </label>
     </>
   )

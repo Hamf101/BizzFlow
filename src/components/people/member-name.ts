@@ -41,6 +41,20 @@ export function memberLabel(member: Pick<OrganizationMember, "email" | "fullName
 }
 
 /**
+ * Members as choices to search: each by name, with their email beneath, and
+ * their account as the value a form sends.
+ *
+ * @param members - The members on offer.
+ * @returns One choice each.
+ */
+export function memberOptions(members: readonly Pick<OrganizationMember, "email" | "fullName" | "userId">[]): Array<{ hint?: string; label: string; value: string }> {
+  return members.map((member) => {
+    const label = memberLabel(member)
+    return { hint: label === member.email ? undefined : member.email, label, value: member.userId }
+  })
+}
+
+/**
  * Two letters for an avatar: the first letters of a name's first and last
  * words, or the email's first letter when the name is blank.
  *
