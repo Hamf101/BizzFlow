@@ -533,3 +533,12 @@
   --signer-5: #e294bc; --signer-5-soft: #432433;
   --signer-6: #d8c674; --signer-6-soft: #3b3519;
 }
+/* Fields sit on the paper, which stays a light page in both themes, so their tones do too. */
+[data-document-surface="paper"] {
+  --signer-1: #6f5a8a; --signer-1-soft: #ece6f3;
+  --signer-2: #1f7a62; --signer-2-soft: #dff1ea;
+  --signer-3: #a5552f; --signer-3-soft: #f8e6dc;
+  --signer-4: #3a6aa3; --signer-4-soft: #e2ecf8;
+  --signer-5: #93406a; --signer-5-soft: #f6e1ec;
+  --signer-6: #7a6a1f; --signer-6-soft: #f2edd6;
+}

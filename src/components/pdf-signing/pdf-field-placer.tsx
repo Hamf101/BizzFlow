@@ -95,30 +95,44 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
     setSelected(null)
   }
 
-  function place(pageNumber: number, event: ReactPointerEvent<HTMLDivElement>): void {
-    if (!armed) return
-    const rect = event.currentTarget.getBoundingClientRect()
+  /** Adds a field centred on a point of a page, given as fractions of it, and kept on the page. */
+  function add(kind: PdfFieldKind, pageNumber: number, at: { x: number; y: number }): string {
     const page = shownSize(view.pages[pageNumber - 1]!)
-    const [w, h] = KIND.get(armed)!.size
+    const [w, h] = KIND.get(kind)!.size
     const width = Math.min(1, w / page.width)
     const height = Math.min(1, h / page.height)
     const field: PdfField = {
       fontSize: null,
       height,
       id: crypto.randomUUID(),
-      kind: armed,
+      kind,
       label: null,
       page: pageNumber,
       required: true,
       signerId: active.id,
       width,
-      // Centred where the page was tapped, and kept on the page.
-      x: clamp((event.clientX - rect.left) / rect.width - width / 2, 0, 1 - width),
-      y: clamp((event.clientY - rect.top) / rect.height - height / 2, 0, 1 - height),
+      x: clamp(at.x - width / 2, 0, 1 - width),
+      y: clamp(at.y - height / 2, 0, 1 - height),
     }
     setLayout((current) => ({ ...current, fields: [...current.fields, field] }))
     setSelected(field.id)
     setArmed(null)
+    return field.id
+  }
+
+  function place(pageNumber: number, event: ReactPointerEvent<HTMLDivElement>): void {
+    if (!armed) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    add(armed, pageNumber, { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height })
+  }
+
+  /** From the keyboard: in the middle of the page in view, focused so the arrow keys move it. */
+  function addFromKeyboard(kind: PdfFieldKind): void {
+    const middle = window.innerHeight / 2
+    const pages = [...document.querySelectorAll<HTMLElement>("[data-page]")]
+    const shown = pages.find((page) => page.getBoundingClientRect().bottom > middle) ?? pages[0]
+    const id = add(kind, Number(shown?.dataset.page ?? 1), { x: 0.5, y: 0.5 })
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-field-id="${id}"]`)?.focus())
   }
 
   function drag(event: ReactPointerEvent<HTMLElement>, field: PdfField, mode: "move" | "resize"): void {
@@ -223,6 +237,7 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
                         isSelected && "ring-2 ring-(--tone) ring-offset-1 ring-offset-card",
                         !field.required && "border-dashed"
                       )}
+                      data-field-id={field.id}
                       data-field-kind={field.kind}
                       data-slot="pdf-field"
                       key={field.id}
@@ -316,7 +331,8 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
                 aria-pressed={armed === entry.kind}
                 className="grid size-9 place-items-center rounded-full outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 aria-pressed:bg-primary aria-pressed:text-primary-foreground"
                 key={entry.kind}
-                onClick={() => setArmed((current) => (current === entry.kind ? null : entry.kind))}
+                // A click arms the tool for a tap on the page; a key press places the field at once.
+                onClick={(event) => (event.detail === 0 ? addFromKeyboard(entry.kind) : setArmed((current) => (current === entry.kind ? null : entry.kind)))}
                 title={entry.label}
                 type="button"
               >

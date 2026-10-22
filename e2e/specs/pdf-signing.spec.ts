@@ -82,6 +82,13 @@ test("an uploaded PDF is sent as it is: fields for each signer, each signs only 
   await page.reload()
   await expect(page.locator('[data-slot="pdf-field"]')).toHaveCount(2)
 
+  // From the keyboard alone: a tool places its field in view, focused, and Delete takes it away.
+  await page.getByRole("button", { exact: true, name: "Checkbox" }).press("Enter")
+  await expect(page.getByRole("button", { name: /^Checkbox for / })).toBeFocused()
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("Delete")
+  await expect(page.locator('[data-slot="pdf-field"]')).toHaveCount(2)
+
   const tenantEmail = uniqueEmail("tenant")
   const landlordEmail = uniqueEmail("landlord")
   await page.getByRole("button", { name: "Send for signature" }).click()
