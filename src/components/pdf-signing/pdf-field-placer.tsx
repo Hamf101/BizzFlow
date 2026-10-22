@@ -37,10 +37,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { readSignerPerson, SignerPersonField } from "@/components/pdf-signing/signer-person-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SubmitButton } from "@/components/ui/submit-button"
 import { Switch } from "@/components/ui/switch"
+import { type FieldEdges, reshapeField } from "@/lib/pdf/field-geometry"
+import { findLine, type FoundLine } from "@/lib/pdf/find-line"
 import { clamp, cn } from "@/lib/utils"
 import type { PdfFieldEditorView } from "@/services/pdf-signing-service"
 import type { PdfField, PdfFieldKind, PdfFieldLayout } from "@/types/pdf-fields"
@@ -56,6 +59,15 @@ const FIELD_KINDS: ReadonlyArray<Readonly<{ icon: LucideIcon; kind: PdfFieldKind
 ]
 // pdf.js needs the browser's document, so the pages draw there only.
 const PdfPages = dynamic(() => import("@/components/pdf-signing/pdf-pages").then((module) => module.PdfPages), { ssr: false })
+// Corners resize both ways and sides only across, each centred on its edge.
+const HANDLES: ReadonlyArray<Readonly<{ className: string; edges: FieldEdges; name: string }>> = [
+  { className: "top-0 left-0 -translate-1/2 cursor-nwse-resize", edges: { left: true, top: true }, name: "top-left" },
+  { className: "top-0 right-0 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize", edges: { right: true, top: true }, name: "top-right" },
+  { className: "bottom-0 left-0 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize", edges: { bottom: true, left: true }, name: "bottom-left" },
+  { className: "right-0 bottom-0 translate-1/2 cursor-nwse-resize", edges: { bottom: true, right: true }, name: "bottom-right" },
+  { className: "top-1/2 left-0 -translate-1/2 cursor-ew-resize", edges: { left: true }, name: "left" },
+  { className: "top-1/2 right-0 translate-x-1/2 -translate-y-1/2 cursor-ew-resize", edges: { right: true }, name: "right" },
+]
 const KIND = new Map(FIELD_KINDS.map((entry) => [entry.kind, entry]))
 // The smallest a field may be made (the layout schema's floor), and how far a key moves one.
 const MIN_WIDTH = 0.02
@@ -100,10 +112,11 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
    * the page: centred across, and with its foot at the point when it is
    * tapped, as people tap the line a signature goes on.
    */
-  function add(kind: PdfFieldKind, pageNumber: number, at: { x: number; y: number }, foot = false): string {
+  function add(kind: PdfFieldKind, pageNumber: number, at: { x: number; y: number }, foot = false, line: FoundLine | null = null): string {
     const page = shownSize(view.pages[pageNumber - 1]!)
     const [w, h] = KIND.get(kind)!.size
-    const width = Math.min(1, w / page.width)
+    // On a line, a field takes the line's length; never shorter than its words need.
+    const width = line ? clamp(line.x1 - line.x0, 40 / page.width, 1) : Math.min(1, w / page.width)
     const height = Math.min(1, h / page.height)
     const field: PdfField = {
       fontSize: null,
@@ -115,8 +128,9 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
       required: true,
       signerId: active.id,
       width,
-      x: clamp(at.x - width / 2, 0, 1 - width),
-      y: clamp(foot ? at.y - height : at.y - height / 2, 0, 1 - height),
+      // On a line it starts where the line starts and stands on it; elsewhere it is centred where tapped.
+      x: clamp(line ? line.x0 : at.x - width / 2, 0, 1 - width),
+      y: clamp(line ? line.y - height : foot ? at.y - height : at.y - height / 2, 0, 1 - height),
     }
     setLayout((current) => ({ ...current, fields: [...current.fields, field] }))
     setSelected(field.id)
@@ -127,7 +141,10 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
   function place(pageNumber: number, event: ReactPointerEvent<HTMLDivElement>): void {
     if (!armed) return
     const rect = event.currentTarget.getBoundingClientRect()
-    add(armed, pageNumber, { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height }, true)
+    const at = { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height }
+    // A box is its own size; every other field fits the line it was dropped on.
+    const canvas = armed === "checkbox" ? null : event.currentTarget.closest("[data-page]")?.querySelector("canvas")
+    add(armed, pageNumber, at, true, canvas ? lineOn(canvas, at) : null)
   }
 
   /** From the keyboard: in the middle of the page in view, focused so the arrow keys move it. */
@@ -139,7 +156,8 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-field-id="${id}"]`)?.focus())
   }
 
-  function drag(event: ReactPointerEvent<HTMLElement>, field: PdfField, mode: "move" | "resize"): void {
+  /** Moves a field, or with edges given, reshapes it by those edges. */
+  function drag(event: ReactPointerEvent<HTMLElement>, field: PdfField, edges: FieldEdges | null): void {
     if (!editable || event.button !== 0) return
     event.preventDefault()
     event.stopPropagation()
@@ -153,9 +171,9 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
       const dy = (moved.clientY - start.y) / rect.height
       change(
         field.id,
-        mode === "move"
-          ? { x: clamp(field.x + dx, 0, 1 - field.width), y: clamp(field.y + dy, 0, 1 - field.height) }
-          : { height: clamp(field.height + dy, MIN_HEIGHT, 1 - field.y), width: clamp(field.width + dx, MIN_WIDTH, 1 - field.x) }
+        edges
+          ? reshapeField(field, edges, dx, dy, { height: MIN_HEIGHT, width: MIN_WIDTH })
+          : { x: clamp(field.x + dx, 0, 1 - field.width), y: clamp(field.y + dy, 0, 1 - field.height) }
       )
     }
     const onUp = (): void => {
@@ -173,7 +191,11 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
     const moves: Record<string, [number, number]> = { ArrowDown: [0, step], ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step] }
     const move = moves[event.key]
 
-    if (move && editable) {
+    if (move && editable && event.altKey) {
+      // Alt with an arrow resizes: right and down grow the field, left and up shrink it.
+      event.preventDefault()
+      change(field.id, reshapeField(field, { bottom: true, right: true }, move[0], move[1], { height: MIN_HEIGHT, width: MIN_WIDTH }))
+    } else if (move && editable) {
       event.preventDefault()
       change(field.id, { x: clamp(field.x + move[0], 0, 1 - field.width), y: clamp(field.y + move[1], 0, 1 - field.height) })
     } else if ((event.key === "Delete" || event.key === "Backspace") && editable) {
@@ -237,7 +259,7 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
                       aria-pressed={isSelected}
                       className={cn(
                         // See-through, so the line and words under a field still show.
-                        "absolute flex touch-none items-center gap-1 overflow-hidden rounded-sm border-[1.5px] border-(--tone) bg-(--tone-soft)/65 px-1 text-[11px] leading-[1.2] text-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                        "absolute flex touch-none items-center gap-1 rounded-sm border-[1.5px] border-(--tone) bg-(--tone-soft)/65 px-1 text-[11px] leading-[1.2] text-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50",
                         editable && "cursor-move",
                         isSelected && "ring-2 ring-(--tone) ring-offset-1 ring-offset-card",
                         !field.required && "border-dashed"
@@ -248,7 +270,7 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
                       key={field.id}
                       onFocus={() => setSelected(field.id)}
                       onKeyDown={(event) => nudge(event, field)}
-                      onPointerDown={(event) => drag(event, field, "move")}
+                      onPointerDown={(event) => drag(event, field, null)}
                       role="button"
                       style={{
                         ...signerTone(signerIndex.get(field.signerId) ?? 0),
@@ -260,14 +282,18 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
                       tabIndex={0}
                     >
                       <kind.icon aria-hidden="true" className="size-3 shrink-0 text-(--tone)" />
-                      {field.kind === "checkbox" ? null : <span className="truncate">{field.label ?? kind.label}</span>}
-                      {isSelected && editable ? (
-                        <span
-                          aria-hidden="true"
-                          className="absolute right-0 bottom-0 size-3 cursor-nwse-resize rounded-tl-sm bg-(--tone)"
-                          onPointerDown={(event) => drag(event, field, "resize")}
-                        />
-                      ) : null}
+                      {field.kind === "checkbox" ? null : <span className="min-w-0 truncate">{field.label ?? kind.label}</span>}
+                      {isSelected && editable
+                        ? HANDLES.map((handle) => (
+                            <span
+                              aria-hidden="true"
+                              className={cn("absolute z-10 rounded-full border-2 border-(--tone) bg-card max-md:size-4 md:size-2.5", handle.className)}
+                              data-handle={handle.name}
+                              key={handle.name}
+                              onPointerDown={(event) => drag(event, field, handle.edges)}
+                            />
+                          ))
+                        : null}
                     </div>
                   )
                 })}
@@ -367,6 +393,17 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
       <SendDialog flush={autosave.flush} layout={layout} onClose={() => setSending(false)} open={sending} view={view} />
     </div>
   )
+}
+
+/** The line under a tap on a drawn page, or null when there is none or the page can't be read. */
+function lineOn(canvas: HTMLCanvasElement, at: { x: number; y: number }): FoundLine | null {
+  try {
+    // ponytail: reads the whole page each tap; read only a band near the tap if large pages lag.
+    const pixels = canvas.getContext("2d")?.getImageData(0, 0, canvas.width, canvas.height).data
+    return pixels ? findLine(pixels, canvas.width, canvas.height, at) : null
+  } catch {
+    return null
+  }
 }
 
 /** Over the chosen field: whose it is, whether it must be filled, and a way to remove it. */
@@ -494,7 +531,7 @@ function SendDialog({
     <Dialog onOpenChange={(next) => !next && onClose()} open={open}>
       <DialogContent className="sm:max-w-md">
         <DialogTitle>Send for signature</DialogTitle>
-        <DialogDescription>Each person gets their own private link and fills only their fields.</DialogDescription>
+        <DialogDescription>Pick someone from your workspace or type an email. Each gets their own private link and fills only their fields.</DialogDescription>
         {empty.length > 0 ? (
           <p className="text-sm text-destructive" role="alert">
             Give {empty.map((signer) => signer.name).join(" and ")} at least one field first.
@@ -503,28 +540,25 @@ function SendDialog({
           <form
             action={async (formData: FormData) => {
               // The fields as they are now are what everyone signs.
+              const people = layout.signers.map((signer) => ({ person: readSignerPerson(String(formData.get(`person-${signer.id}`) ?? "")), signer }))
+              const unknown = people.find(({ person }) => !person)
+              if (unknown) return setError(`Choose someone for ${unknown.signer.name} from the list, or type their email.`)
               if (!(await flush())) return setError("Your latest changes didn't save. Try again in a moment.")
               setError("")
-              formData.set(
-                "recipients",
-                JSON.stringify(layout.signers.map((signer) => ({ email: formData.get(`email-${signer.id}`), name: formData.get(`name-${signer.id}`), signerId: signer.id })))
-              )
+              formData.set("recipients", JSON.stringify(people.map(({ person, signer }) => ({ ...person, signerId: signer.id }))))
               await sendPdfForSigningAction(formData)
             }}
             className="grid gap-4"
           >
             <input name="documentId" type="hidden" value={view.documentId} />
             {layout.signers.map((signer, index) => (
-              <fieldset className="grid gap-2" key={signer.id}>
-                <legend className="mb-1 flex items-center gap-2 text-sm font-medium" style={signerTone(index)}>
+              <div className="grid gap-1.5" key={signer.id}>
+                <span className="flex items-center gap-2 text-sm font-medium" style={signerTone(index)}>
                   <span aria-hidden="true" className="size-2 rounded-full bg-(--tone)" />
                   {signer.name}
-                </legend>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Input aria-label={`${signer.name}'s name`} autoComplete="off" maxLength={120} name={`name-${signer.id}`} placeholder="Jordan Ellis" required />
-                  <Input aria-label={`${signer.name}'s email`} autoComplete="off" maxLength={254} name={`email-${signer.id}`} placeholder="jordan@example.com" required type="email" />
-                </div>
-              </fieldset>
+                </span>
+                <SignerPersonField label={`Who signs as ${signer.name}`} name={`person-${signer.id}`} />
+              </div>
             ))}
             {error ? (
               <p className="text-sm text-destructive" role="alert">

@@ -19,6 +19,8 @@ const PdfPages = dynamic(() => import("@/components/pdf-signing/pdf-pages").then
 
 type Value = string | boolean
 
+const SHORT_DATE = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" })
+
 // Drawn once at the end of the page, not in each box: one signature and one set of initials per signer.
 const DRAWN = new Set(["signature", "initials"])
 
@@ -124,7 +126,7 @@ export function PdfSigningForm({ token, view }: { token: string; view: PublicPdf
                     style={{ ...box, ...tone, borderStyle: "dashed" }}
                     type="button"
                   >
-                    <span className="truncate">{field.kind === "signature" ? "Sign at the end" : "Initials at the end"}</span>
+                    <span className="truncate">{field.kind === "signature" ? "Sign below" : "Initials below"}</span>
                   </button>
                 )
               }
@@ -141,6 +143,26 @@ export function PdfSigningForm({ token, view }: { token: string; view: PublicPdf
                     style={{ ...box, ...tone }}
                     type="checkbox"
                   />
+                )
+              }
+
+              if (field.kind === "date") {
+                const picked = typeof values[field.id] === "string" ? (values[field.id] as string) : ""
+
+                // The date as it will print, over the device's own picker, so a short line still fits it.
+                return (
+                  <label className={cn(live, "flex items-center overflow-hidden px-1")} key={field.id} style={{ ...box, ...tone }}>
+                    <span className={cn("truncate", !picked && "text-muted-foreground")}>{picked ? SHORT_DATE.format(new Date(`${picked}T00:00:00`)) : "Date"}</span>
+                    <input
+                      aria-label={label}
+                      className="absolute inset-0 size-full cursor-pointer opacity-0"
+                      data-fill={field.id}
+                      onChange={(event) => set(field.id, event.target.value)}
+                      onClick={(event) => event.currentTarget.showPicker?.()}
+                      type="date"
+                      value={picked}
+                    />
+                  </label>
                 )
               }
 
@@ -174,22 +196,14 @@ export function PdfSigningForm({ token, view }: { token: string; view: PublicPdf
               return (
                 <input
                   aria-label={label}
-                  className={cn(live, "px-1 [&::-webkit-calendar-picker-indicator]:ml-0 [&::-webkit-calendar-picker-indicator]:w-3")}
+                  className={cn(live, "px-1")}
                   data-fill={field.id}
                   key={field.id}
                   maxLength={500}
                   onChange={(event) => set(field.id, event.target.value)}
-                  placeholder={field.kind === "date" ? undefined : (field.label ?? "Type here")}
-                  // A date control needs its own width to show the whole date; it grows past a short line rather than cut it off.
-                  style={{
-                    ...box,
-                    ...tone,
-                    // On the page's right half it grows leftwards, so it stays on the page.
-                    ...(field.kind === "date"
-                      ? { minWidth: box.width, width: "auto", ...(field.x > 0.5 ? { left: "auto", right: `${(1 - field.x - field.width) * 100}%` } : null) }
-                      : null),
-                  }}
-                  type={field.kind === "date" ? "date" : "text"}
+                  placeholder={field.label ?? "Type here"}
+                  style={{ ...box, ...tone }}
+                  type="text"
                   value={typeof values[field.id] === "string" ? (values[field.id] as string) : ""}
                 />
               )

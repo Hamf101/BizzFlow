@@ -1,3 +1,5 @@
+import { clamp } from "@/lib/utils"
+
 /**
  * Where a field sits on a page as people see it: fractions of the shown
  * page's width and height, measured from its top left. Zoom, screen density
@@ -84,4 +86,30 @@ export function placeOnPage(field: PageFraction, page: PdfPageBox): PdfPlacement
     rotate: page.rotation,
     width: field.width * shown.width,
   }
+}
+
+/** Which edges of a field are being dragged. */
+export type FieldEdges = Readonly<{ bottom?: boolean; left?: boolean; right?: boolean; top?: boolean }>
+
+/**
+ * Reshapes a field by dragging some of its edges, as fractions of the page:
+ * the edges not held stay put, the field never shrinks below its floor, and
+ * it never leaves the page.
+ *
+ * @param field - Where the field is.
+ * @param edges - The edges being dragged.
+ * @param dx - How far across they moved.
+ * @param dy - How far down they moved.
+ * @param min - The smallest width and height a field may have.
+ * @returns Where the field is now.
+ */
+export function reshapeField(field: PageFraction, edges: FieldEdges, dx: number, dy: number, min: Readonly<{ height: number; width: number }>): PageFraction {
+  const right = field.x + field.width
+  const bottom = field.y + field.height
+  const left = edges.left ? clamp(field.x + dx, 0, right - min.width) : field.x
+  const top = edges.top ? clamp(field.y + dy, 0, bottom - min.height) : field.y
+  const newRight = edges.right ? clamp(right + dx, left + min.width, 1) : right
+  const newBottom = edges.bottom ? clamp(bottom + dy, top + min.height, 1) : bottom
+
+  return { height: newBottom - top, width: newRight - left, x: left, y: top }
 }

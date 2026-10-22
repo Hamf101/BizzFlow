@@ -82,6 +82,21 @@ test("an uploaded PDF is sent as it is: fields for each signer, each signs only 
   await page.reload()
   await expect(page.locator('[data-slot="pdf-field"]')).toHaveCount(2)
 
+  // A field's size is the sender's to change: drag a side handle, or Alt with an arrow key.
+  const date = page.getByRole("button", { name: "Date for Landlord" })
+  await date.click()
+  const before = (await date.boundingBox())!
+  const handle = date.locator('[data-handle="right"]')
+  const grip = (await handle.boundingBox())!
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(grip.x + grip.width / 2 + 40, grip.y + grip.height / 2, { steps: 4 })
+  await page.mouse.up()
+  expect((await date.boundingBox())!.width).toBeGreaterThan(before.width + 30)
+  const wider = (await date.boundingBox())!
+  await date.press("Alt+ArrowDown")
+  expect((await date.boundingBox())!.height).toBeGreaterThan(wider.height)
+
   // From the keyboard alone: a tool places its field in view, focused, and Delete takes it away.
   await page.getByRole("button", { exact: true, name: "Checkbox" }).press("Enter")
   await expect(page.getByRole("button", { name: /^Checkbox for / })).toBeFocused()
@@ -89,13 +104,15 @@ test("an uploaded PDF is sent as it is: fields for each signer, each signs only 
   await page.keyboard.press("Delete")
   await expect(page.locator('[data-slot="pdf-field"]')).toHaveCount(2)
 
-  const tenantEmail = uniqueEmail("tenant")
+  // One field each: the tenant is found in the workspace, the landlord is reached by email.
+  const tenantEmail = tenant.users.manager.email
   const landlordEmail = uniqueEmail("landlord")
   await page.getByRole("button", { name: "Send for signature" }).click()
-  await page.getByLabel("Tenant's name").fill("Jordan Ellis")
-  await page.getByLabel("Tenant's email").fill(tenantEmail)
-  await page.getByLabel("Landlord's name").fill("Sam Rivera")
-  await page.getByLabel("Landlord's email").fill(landlordEmail)
+  const tenantField = page.getByRole("combobox", { name: "Who signs as Tenant" })
+  await tenantField.fill(tenantEmail.slice(0, 10))
+  await page.getByRole("option").filter({ hasText: tenantEmail }).click()
+  await expect(tenantField).toHaveValue(new RegExp(`<${tenantEmail.replace(/[.+]/g, "\\$&")}>$`))
+  await page.getByRole("combobox", { name: "Who signs as Landlord" }).fill(landlordEmail)
   await page.getByRole("button", { exact: true, name: "Send" }).click()
   await expect(page.getByRole("heading", { name: title })).toBeVisible()
 
@@ -104,7 +121,7 @@ test("an uploaded PDF is sent as it is: fields for each signer, each signs only 
   const documentId = document!.id as string
   const links: Record<string, string> = {}
   for (const email of [tenantEmail, landlordEmail]) {
-    links[email] = `pdf-signing-e2e-${createHash("sha256").update(email).digest("hex").slice(0, 32)}`
+    links[email] = `pdf-signing-e2e-${createHash("sha256").update(`${documentId}:${email}`).digest("hex").slice(0, 32)}`
     const { error } = await admin
       .from("document_signing_recipients")
       .update({ token_hash: createHash("sha256").update(links[email]!, "utf8").digest("hex") })
@@ -120,7 +137,7 @@ test("an uploaded PDF is sent as it is: fields for each signer, each signs only 
   await expect(tenantPage.locator('[data-slot="pdf-field-other"]')).toHaveText(["Landlord"])
   await expect(tenantPage.locator("input[type=date]")).toHaveCount(0)
   await sign(tenantPage)
-  await expect(tenantPage.getByText("Waiting for Sam Rivera")).toBeVisible()
+  await expect(tenantPage.getByText(`Waiting for ${landlordEmail}`)).toBeVisible()
 
   // The landlord's Next field takes them to their date; they sign last.
   const landlordPage = await (await browser.newContext()).newPage()
