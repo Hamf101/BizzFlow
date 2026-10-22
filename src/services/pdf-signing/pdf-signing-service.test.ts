@@ -18,6 +18,7 @@ import {
   completePublicPdfSigning,
   confirmPdfAttachmentUpload,
   createPdfAttachmentUpload,
+  finalizeSignedUpload,
   finalizeUploadedPdf,
   getPdfFieldEditor,
   getPublicPdfSigningView,
@@ -92,7 +93,7 @@ function harness(access: "contributor" | "viewer" = "contributor") {
       { byte_size: 2_048, content_type: "application/pdf", document_id: DOCUMENT_ID, id: VERSION_ID, org_id: ORG_ID, status: "available", storage_key: "organizations/o/documents/d/lease.pdf" },
     ],
     documents: [
-      { archived_at: null, current_version_id: VERSION_ID, id: DOCUMENT_ID, lifecycle_state: "active", org_id: ORG_ID, source_kind: "upload", title: "Lease agreement" },
+      { archived_at: null, created_by: MANAGER_ID, current_version_id: VERSION_ID, id: DOCUMENT_ID, lifecycle_state: "active", org_id: ORG_ID, source_kind: "upload", title: "Lease agreement" },
     ],
     organization_memberships: [{ org_id: ORG_ID, role: "manager", status: "active", user_id: MANAGER_ID }],
     organizations: [{ id: ORG_ID, name: "Northwind Property" }],
@@ -194,15 +195,17 @@ describe("fields on an uploaded PDF", () => {
       ["Tenant", "Jordan Ellis"],
       ["Landlord", "Sam Rivera"],
     ])
-    await expect(completePublicPdfSigning({ signatureDataUrl: DRAWING_DATA_URL, token, values: { [DATE]: "2026-09-29" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
-    await expect(completePublicPdfSigning({ signatureDataUrl: DRAWING_DATA_URL, token, values: { [AGREE]: "yes" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
-    await expect(completePublicPdfSigning({ signatureDataUrl: null, token, values: { [NAME]: "Jordan Ellis" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(completePublicPdfSigning({ consented: true, ip: "203.0.113.7", signatureDataUrl: DRAWING_DATA_URL, token, values: { [DATE]: "2026-09-29" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(completePublicPdfSigning({ consented: true, ip: "203.0.113.7", signatureDataUrl: DRAWING_DATA_URL, token, values: { [AGREE]: "yes" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(completePublicPdfSigning({ consented: true, ip: "203.0.113.7", signatureDataUrl: null, token, values: { [NAME]: "Jordan Ellis" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    // Without agreeing to sign electronically, nothing is signed.
+    await expect(completePublicPdfSigning({ consented: false, signatureDataUrl: DRAWING_DATA_URL, token, values: { [AGREE]: true, [NAME]: "Jordan Ellis" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
     expect(client.completions).toEqual([])
 
-    const signed = await completePublicPdfSigning({ signatureDataUrl: DRAWING_DATA_URL, token, values: { [AGREE]: true, [NAME]: "  Jordan Ellis " } }, deps)
+    const signed = await completePublicPdfSigning({ consented: true, ip: "203.0.113.7", signatureDataUrl: DRAWING_DATA_URL, token, values: { [AGREE]: true, [NAME]: "  Jordan Ellis " } }, deps)
 
     expect(client.completions).toHaveLength(1)
-    expect(client.completions[0]).toMatchObject({ target_values: { [AGREE]: true, [NAME]: "Jordan Ellis" } })
+    expect(client.completions[0]).toMatchObject({ target_consented: true, target_ip: "203.0.113.7", target_values: { [AGREE]: true, [NAME]: "Jordan Ellis" } })
     expect(signed.recipient.status).toBe("signed")
     expect(signed.values).toEqual({ [AGREE]: true, [NAME]: "Jordan Ellis" })
   })
@@ -244,11 +247,11 @@ describe("fields on an uploaded PDF", () => {
       storage: { store: vi.fn(async ({ pdf }: { pdf: Uint8Array }) => void stored.push(pdf)) },
     }
 
-    await completePublicPdfSigning({ signatureDataUrl: DRAWING_DATA_URL, token: tenant!, values: { [AGREE]: true, [NAME]: "Jordan Ellis" } }, deps)
+    await completePublicPdfSigning({ consented: true, ip: "203.0.113.7", signatureDataUrl: DRAWING_DATA_URL, token: tenant!, values: { [AGREE]: true, [NAME]: "Jordan Ellis" } }, deps)
     await expect(finalizeUploadedPdf(member, finalize)).rejects.toMatchObject({ statusCode: 409 })
     expect(finalize.storage.store).not.toHaveBeenCalled()
 
-    await completePublicPdfSigning({ token: landlord!, values: { [DATE]: "2026-09-29" } }, deps)
+    await completePublicPdfSigning({ consented: true, ip: "203.0.113.7", token: landlord!, values: { [DATE]: "2026-09-29" } }, deps)
     expect(client.tables.document_answers![0]).toMatchObject({ workflow_status: "completed" })
     expect(await finalizeUploadedPdf(member, finalize)).toEqual({
       finalizationId: "70000000-0000-4000-8000-000000000001",
@@ -260,7 +263,15 @@ describe("fields on an uploaded PDF", () => {
       (await (await pdf.getPage(page)).getTextContent()).items.map((item) => ("str" in item ? item.str : "")).filter(Boolean)
     expect(await words(1)).toEqual(["Jordan Ellis"])
     expect(await words(2)).toEqual(["Sep 29, 2026"])
+    // The copy closes with the signing certificate, naming both signers.
+    expect((await words(3)).join(" ")).toEqual(expect.stringContaining("Signing certificate"))
+    expect((await words(3)).join(" ")).toEqual(expect.stringContaining("sam@example.com"))
     expect(finalize.persistence.promote).toHaveBeenCalledWith(expect.objectContaining({ originalFilename: "Lease-agreement-final.pdf" }))
+
+    // Right after the last signature, the signed copy is made as its sender and everyone is sent it.
+    const sendSignedCopies = vi.fn(async () => 3)
+    expect(await finalizeSignedUpload({ token: landlord! }, { ...finalize, sendSignedCopies })).toBe(true)
+    expect(sendSignedCopies).toHaveBeenCalledWith({ documentId: DOCUMENT_ID, organizationId: ORG_ID })
   })
 
   it("takes an attachment only for the signer's own attachment field, and counts it once what arrived checks out", async () => {

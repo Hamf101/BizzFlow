@@ -262,7 +262,7 @@ export async function renderPdfLibDocument(
   return Buffer.from(await document.save({ updateFieldAppearances: false, useObjectStreams: false }))
 }
 
-async function loadBundledPdfFonts(): Promise<{
+export async function loadBundledPdfFonts(): Promise<{
   bold: Buffer
   regular: Buffer
 }> {

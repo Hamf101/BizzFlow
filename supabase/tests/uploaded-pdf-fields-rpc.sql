@@ -91,7 +91,7 @@ begin
   -- The tenant cannot fill the landlord's field, or leave their own box unticked.
   begin
     perform public.complete_pdf_recipient_signature(organization_id, document_id, tenant_recipient, tenant_hash,
-      jsonb_build_object(name_field, 'Jordan Ellis', agree_field, true, date_field, '2026-09-29'), drawing, null);
+      jsonb_build_object(name_field, 'Jordan Ellis', agree_field, true, date_field, '2026-09-29'), drawing, null, true, '203.0.113.7');
     refused := false;
   exception when invalid_parameter_value then
     refused := true;
@@ -102,7 +102,7 @@ begin
 
   begin
     perform public.complete_pdf_recipient_signature(organization_id, document_id, tenant_recipient, tenant_hash,
-      jsonb_build_object(name_field, 'Jordan Ellis', agree_field, false), drawing, null);
+      jsonb_build_object(name_field, 'Jordan Ellis', agree_field, false), drawing, null, true, '203.0.113.7');
     refused := false;
   exception when invalid_parameter_value then
     refused := true;
@@ -113,7 +113,7 @@ begin
 
   begin
     perform public.complete_pdf_recipient_signature(organization_id, document_id, tenant_recipient, tenant_hash,
-      jsonb_build_object(name_field, 'Jordan Ellis', agree_field, true), null, null);
+      jsonb_build_object(name_field, 'Jordan Ellis', agree_field, true), null, null, true, '203.0.113.7');
     refused := false;
   exception when invalid_parameter_value then
     refused := true;
@@ -122,8 +122,26 @@ begin
     raise exception 'A signature field was left unsigned.';
   end if;
 
+  -- Nobody signs without agreeing to sign electronically.
+  begin
+    perform public.complete_pdf_recipient_signature(organization_id, document_id, tenant_recipient, tenant_hash,
+      jsonb_build_object(name_field, 'Jordan Ellis', agree_field, true), drawing, null, false, '203.0.113.7');
+    refused := false;
+  exception when invalid_parameter_value then
+    refused := true;
+  end;
+  if not refused then
+    raise exception 'A signer who did not consent was let sign.';
+  end if;
+
   outcome := public.complete_pdf_recipient_signature(organization_id, document_id, tenant_recipient, tenant_hash,
-    jsonb_build_object(name_field, 'Jordan Ellis', agree_field, true), drawing, null);
+    jsonb_build_object(name_field, 'Jordan Ellis', agree_field, true), drawing, null, true, '203.0.113.7');
+  if not exists (
+    select 1 from public.document_signing_recipients
+    where id = tenant_recipient and consented_at is not null and signed_ip = '203.0.113.7'
+  ) then
+    raise exception 'A signature should keep when they consented and where they signed from.';
+  end if;
   if outcome <> 'awaiting_signatures' then
     raise exception 'After one of two signers, the document should still wait; it was %.', outcome;
   end if;
@@ -135,7 +153,7 @@ begin
 
   begin
     perform public.complete_pdf_recipient_signature(organization_id, document_id, landlord_recipient, landlord_hash,
-      jsonb_build_object(date_field, '2026-09-29', proof_field, attachment_id), null, null);
+      jsonb_build_object(date_field, '2026-09-29', proof_field, attachment_id), null, null, true, '203.0.113.7');
     refused := false;
   exception when invalid_parameter_value then
     refused := true;
@@ -146,7 +164,7 @@ begin
 
   update public.document_signing_attachments set status = 'available' where id = attachment_id;
   outcome := public.complete_pdf_recipient_signature(organization_id, document_id, landlord_recipient, landlord_hash,
-    jsonb_build_object(date_field, '2026-09-29', proof_field, attachment_id), null, null);
+    jsonb_build_object(date_field, '2026-09-29', proof_field, attachment_id), null, null, true, '203.0.113.7');
   if outcome <> 'completed' then
     raise exception 'The last signature should complete the document; it was %.', outcome;
   end if;

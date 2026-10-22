@@ -18,7 +18,7 @@ const MUTED = rgb(0.42, 0.42, 0.45)
  */
 export function drawSigningCertificate(
   document: PDFDocument,
-  input: NormalizedPdfInput,
+  input: Pick<NormalizedPdfInput, "documentId" | "signers" | "title">,
   fonts: { bold: PDFFont; regular: PDFFont },
   page: { height: number; margin: number; scale: number; width: number }
 ): void {

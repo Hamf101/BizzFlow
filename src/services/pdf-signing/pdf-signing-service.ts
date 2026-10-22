@@ -13,6 +13,7 @@ import { createR2Client } from "@/lib/r2/client"
 import type { DocumentSigningServiceDeps, SigningServiceClient } from "@/services/document-signing/contracts"
 import { getDrawingDataUrl, normalizeOptionalDrawing, normalizeRequiredDrawing } from "@/services/document-signing/drawing-validation"
 import { createDatabaseError, DocumentSigningServiceError, runSigningOperation } from "@/services/document-signing/errors"
+import { sendSignedCopies } from "@/services/document-signing/signed-copies"
 import {
   loadRecipientByToken,
   mapSigningRecipient,
@@ -79,6 +80,20 @@ export type PdfSigningDeps = DocumentSigningServiceDeps & {
   signAttachmentUpload?: (file: Readonly<{ byteSize: number; contentType: string; storageKey: string }>) => Promise<{ expiresAt: string; uploadUrl: string }>
   /** Checks what arrived is the file described: its size, its type, and its first bytes. */
   verifyAttachment?: (file: Readonly<{ byteSize: number; contentType: string; storageKey: string }>) => Promise<void>
+}
+
+type CertificateRecipientRow = {
+  consented_at: string | null
+  email: string
+  id: string
+  initials_data: Record<string, unknown> | null
+  name: string
+  requires_signature: boolean
+  signature_data: Record<string, unknown> | null
+  signed_at: string | null
+  signed_ip: string | null
+  signer_id: string | null
+  status: string
 }
 
 type MemberDocumentInput = Readonly<{ actorUserId: string; documentId: string; organizationId: string }>
@@ -288,16 +303,21 @@ export async function getPublicPdfSigningView(input: Readonly<{ token: string }>
  * Keeps what a signer filled in and drew, then completes the document once
  * everyone has signed. A value for anyone else's field is turned away.
  *
- * @param input - The private link's token, the signer's values by field, and their drawings.
+ * @param input - The private link's token, consent, the address signed from, the signer's values by field, and their drawings.
  * @param deps - Injected database and clock for tests.
  * @returns The signer's view after signing.
  * @throws DocumentSigningServiceError 400 for invalid or missing values, 409 once the document stopped.
  */
 export async function completePublicPdfSigning(
-  input: Readonly<{ initialsDataUrl?: string | null; signatureDataUrl?: string | null; token: string; values: unknown }>,
+  input: Readonly<{ consented: boolean; initialsDataUrl?: string | null; ip?: string | null; signatureDataUrl?: string | null; token: string; values: unknown }>,
   deps: PdfSigningDeps = {}
 ): Promise<PublicPdfSigningView> {
   return runSigningOperation("complete_public_pdf_signing", {}, async () => {
+    // As on a generated document, consent comes first: without it nothing is read or signed.
+    if (input.consented !== true) {
+      throw new DocumentSigningServiceError("Agree to sign electronically to sign.", 400)
+    }
+
     const client = resolveSigningClient(deps.client)
     const tokenHash = hashToken(normalizeToken(input.token))
     const recipient = await loadRecipientByToken(client, tokenHash)
@@ -323,6 +343,8 @@ export async function completePublicPdfSigning(
       target_signature_data: signature,
       target_token_hash: tokenHash,
       target_values: values,
+      target_consented: true,
+      target_ip: input.ip ?? null,
     })
 
     if (error?.code === "22023") {
@@ -437,7 +459,7 @@ export async function finalizeUploadedPdf(
     const layout = parseStoredLayout(row.layout)
     const [answers, recipients, version, attachments] = await Promise.all([
       client.from("document_answers").select("values,workflow_status").eq("document_id", input.documentId).eq("org_id", input.organizationId).maybeSingle(),
-      client.from("document_signing_recipients").select("signer_id,signature_data,initials_data").eq("document_id", input.documentId).eq("org_id", input.organizationId),
+      client.from("document_signing_recipients").select("id,signer_id,name,email,status,requires_signature,signed_at,consented_at,signed_ip,signature_data,initials_data").eq("document_id", input.documentId).eq("org_id", input.organizationId),
       client.from("document_versions").select("storage_key").eq("id", row.version_id).eq("document_id", input.documentId).eq("org_id", input.organizationId).maybeSingle(),
       client.from("document_signing_attachments").select("id,original_filename").eq("document_id", input.documentId).eq("org_id", input.organizationId).eq("status", "available"),
     ])
@@ -447,10 +469,26 @@ export async function finalizeUploadedPdf(
       throw createDatabaseError(failed, "Unable to load this document's signing.")
     }
 
+    const rows = (recipients.data ?? []) as CertificateRecipientRow[]
+    // The certificate lists signers in the order their roles were set out.
+    const order = new Map(layout.signers.map((signer, index) => [signer.id, index]))
+    const signers = rows
+      .filter((row) => row.status === "signed")
+      .sort((a, b) => (order.get(a.signer_id ?? "") ?? 0) - (order.get(b.signer_id ?? "") ?? 0))
+      .map((row) => ({
+        consentedAt: row.consented_at,
+        email: row.email,
+        id: row.id,
+        name: row.name,
+        requiresSignature: row.requires_signature,
+        signedAt: row.signed_at,
+        signedIp: row.signed_ip,
+        status: "signed" as const,
+      }))
     const values = stampValuesOf(
       layout.fields,
       ((answers.data as { values?: Record<string, unknown> } | null)?.values ?? {}) as Record<string, unknown>,
-      (recipients.data ?? []) as Array<{ initials_data: Record<string, unknown> | null; signature_data: Record<string, unknown> | null; signer_id: string | null }>,
+      rows,
       new Map(((attachments.data ?? []) as Array<{ id: string; original_filename: string }>).map((attachment) => [attachment.id, attachment.original_filename]))
     )
 
@@ -459,13 +497,14 @@ export async function finalizeUploadedPdf(
       filename: normalizeFinalPdfFilename(document.title),
       render: async (metadataTimestamp: string) =>
         stampUploadedPdf({
+          certificate: { documentId: input.documentId, signers },
           fields: layout.fields,
           metadataTimestamp,
           source: await (deps.readObject ?? readStoredObject)((version.data as { storage_key: string }).storage_key),
           title: document.title,
           values,
         }),
-      sha256: createHash("sha256").update(JSON.stringify({ layout, values, versionId: row.version_id })).digest("hex"),
+      sha256: createHash("sha256").update(JSON.stringify({ layout, signers, values, versionId: row.version_id })).digest("hex"),
     }
   })
 }
@@ -502,6 +541,44 @@ function stampValuesOf(
 }
 
 const SHOWN_DATE = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" })
+
+/**
+ * Once the last signer of an uploaded PDF has signed: stamps the signed copy
+ * as the document's sender and emails every signer and the sender a link to
+ * it. Best effort, run after the signer's response; a copy that fails here is
+ * still made the first time someone downloads it.
+ *
+ * @param input - The private link of the signer who signed last.
+ * @param deps - Injected database, storage and email for tests.
+ * @returns Whether the signed copy was made.
+ */
+export async function finalizeSignedUpload(
+  input: Readonly<{ token: string }>,
+  deps: GeneratedDocumentFinalizationServiceDeps & Pick<PdfSigningDeps, "readObject"> = {}
+): Promise<boolean> {
+  const client = resolveSigningClient(deps.client as SigningServiceClient | undefined)
+  const recipient = await loadRecipientByToken(client, hashToken(normalizeToken(input.token)))
+  const { data } = await client.from("documents").select("created_by").eq("id", recipient.document_id).eq("org_id", recipient.org_id).maybeSingle()
+  const createdBy = (data as { created_by: string | null } | null)?.created_by
+  const document = { documentId: recipient.document_id, organizationId: recipient.org_id }
+
+  // ponytail: a document whose sender is gone gets its copy on the first download instead.
+  if (!createdBy) {
+    return false
+  }
+
+  const finalized = await finalizeUploadedPdf({ actorUserId: createdBy, ...document }, deps).then(
+    () => true,
+    () => false
+  )
+
+  if (finalized) {
+    // Once only: a document whose copies went out is left alone.
+    await (deps.sendSignedCopies ?? sendSignedCopies)(document).catch(() => undefined)
+  }
+
+  return finalized
+}
 
 /**
  * Starts a signer's attachment for one of their attachment fields: an address

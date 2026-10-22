@@ -1,9 +1,13 @@
+import * as fontkit from "fontkit"
 import { degrees, EncryptedPDFError, PDFDocument, PDFName, type PDFFont, type PDFPage, rgb, StandardFonts } from "pdf-lib"
 
 import { normalizeRotation, placeOnPage, type PdfPageBox, type PdfPlacement } from "@/lib/pdf/field-geometry"
 import type { PdfField } from "@/types/pdf-fields"
 
 import { DocumentPdfServiceError } from "./errors"
+import { drawSigningCertificate } from "./pdf-lib-certificate"
+import { loadBundledPdfFonts } from "./pdf-lib-renderer"
+import type { DocumentPdfSigner } from "./types"
 
 /** What a signer gave for one field. */
 export type StampValue =
@@ -22,11 +26,13 @@ const PNG_DATA_URL = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/
  * upload itself is never changed, and the same values always make the same file.
  *
  * @param input - The upload's bytes, its fields and values, the copy's title,
- *   and the fixed time its metadata carries.
+ *   the fixed time its metadata carries, and the signers for the signing
+ *   certificate that closes a completed copy.
  * @returns The stamped copy.
  * @throws DocumentPdfServiceError 400 when the upload is locked or unreadable.
  */
 export async function stampUploadedPdf(input: Readonly<{
+  certificate?: Readonly<{ documentId: string; signers: DocumentPdfSigner[] }>
   fields: readonly PdfField[]
   metadataTimestamp: string
   source: Uint8Array
@@ -53,6 +59,15 @@ export async function stampUploadedPdf(input: Readonly<{
     if (value && page) {
       await drawValue(copy, page, font, placeOnPage(field, boxOf(page)), field, value)
     }
+  }
+
+  if (input.certificate) {
+    // The certificate prints names in any script, so it uses the bundled faces, not the standard ones.
+    const bytes = await loadBundledPdfFonts()
+    copy.registerFontkit(fontkit)
+    const fonts = { bold: await copy.embedFont(bytes.bold, { subset: true }), regular: await copy.embedFont(bytes.regular, { subset: true }) }
+    const { height, width } = copy.getPage(0).getSize()
+    drawSigningCertificate(copy, { ...input.certificate, title: input.title }, fonts, { height, margin: 54, scale: 1, width })
   }
 
   copy.setTitle(input.title)

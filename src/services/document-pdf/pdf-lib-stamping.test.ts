@@ -128,6 +128,28 @@ describe("stamping values onto an uploaded PDF", () => {
     expect(Buffer.from(await stamp(source)).equals(Buffer.from(stamped))).toBe(true)
   })
 
+  it("closes with the signing certificate: who signed, when, from where, and that they agreed", async () => {
+    const stamped = await stampUploadedPdf({
+      certificate: {
+        documentId: "70000000-0000-4000-8000-000000000001",
+        signers: [
+          { consentedAt: TIMESTAMP, email: "jordan@example.com", id: SIGNER, name: "Jordan Ellis", requiresSignature: true, signedAt: TIMESTAMP, signedIp: "203.0.113.7", status: "signed" },
+        ],
+      },
+      fields: [NAME],
+      metadataTimestamp: TIMESTAMP,
+      source: await upload(),
+      title: "Lease agreement",
+      values: { [NAME.id]: { kind: "text", text: "Jordan Ellis" } },
+    })
+    const words = (await wordsOn(stamped, 3)).map((item) => item.str).join(" ")
+
+    expect((await PDFDocument.load(stamped)).getPageCount()).toBe(3)
+    expect(words).toContain("Signing certificate")
+    expect(words).toContain("jordan@example.com")
+    expect(words).toContain("203.0.113.7")
+  })
+
   it("turns away a PDF locked with a password", async () => {
     const locked = await PDFDocument.create()
     locked.addPage()

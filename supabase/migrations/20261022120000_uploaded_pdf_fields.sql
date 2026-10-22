@@ -232,7 +232,9 @@ create function public.complete_pdf_recipient_signature(
   target_token_hash text,
   target_values jsonb,
   target_signature_data jsonb,
-  target_initials_data jsonb
+  target_initials_data jsonb,
+  target_consented boolean,
+  target_ip text
 )
 returns text
 language plpgsql
@@ -250,6 +252,11 @@ declare
   recipient_status text;
   recipient_token_expires_at timestamptz;
 begin
+  -- Signing electronically needs the signer's say-so, as on a generated document.
+  if target_consented is not true then
+    raise exception 'Consent to sign electronically is required.'
+      using errcode = '22023';
+  end if;
   if target_values is null or jsonb_typeof(target_values) <> 'object' then
     raise exception 'Field values must be a JSON object.'
       using errcode = '22023';
@@ -375,6 +382,8 @@ begin
   update public.document_signing_recipients recipient
   set status = 'signed',
       signed_at = now(),
+      consented_at = now(),
+      signed_ip = left(nullif(btrim(target_ip), ''), 64),
       viewed_at = coalesce(recipient.viewed_at, now()),
       signature_data = target_signature_data,
       initials_data = target_initials_data
@@ -401,9 +410,9 @@ begin
 end;
 $$;
 
-revoke all on function public.complete_pdf_recipient_signature(uuid, uuid, uuid, text, jsonb, jsonb, jsonb)
+revoke all on function public.complete_pdf_recipient_signature(uuid, uuid, uuid, text, jsonb, jsonb, jsonb, boolean, text)
   from public, anon, authenticated;
-grant execute on function public.complete_pdf_recipient_signature(uuid, uuid, uuid, text, jsonb, jsonb, jsonb)
+grant execute on function public.complete_pdf_recipient_signature(uuid, uuid, uuid, text, jsonb, jsonb, jsonb, boolean, text)
   to service_role;
 
 -- A signed upload finalizes the way a generated document does: a stamped copy,
