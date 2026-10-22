@@ -259,7 +259,7 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
                       aria-pressed={isSelected}
                       className={cn(
                         // See-through, so the line and words under a field still show.
-                        "absolute flex touch-none items-center gap-1 rounded-sm border-[1.5px] border-(--tone) bg-(--tone-soft)/65 px-1 text-[11px] leading-[1.2] text-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                        "@container absolute flex touch-none items-center gap-1 rounded-sm border-[1.5px] border-(--tone) bg-(--tone-soft)/65 px-1 text-[11px] leading-[1.2] text-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50",
                         editable && "cursor-move",
                         isSelected && "ring-2 ring-(--tone) ring-offset-1 ring-offset-card",
                         !field.required && "border-dashed"
@@ -282,7 +282,7 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
                       tabIndex={0}
                     >
                       <kind.icon aria-hidden="true" className="size-3 shrink-0 text-(--tone)" />
-                      {field.kind === "checkbox" ? null : <span className="min-w-0 truncate">{field.label ?? kind.label}</span>}
+                      {field.kind === "checkbox" ? null : <span className="min-w-0 truncate @max-[48px]:hidden">{field.label ?? kind.label}</span>}
                       {isSelected && editable
                         ? HANDLES.map((handle) => (
                             <span
