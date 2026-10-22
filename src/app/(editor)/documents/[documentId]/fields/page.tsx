@@ -5,6 +5,7 @@ import type { ReactElement } from "react"
 
 import { PdfFieldPlacer } from "@/components/pdf-signing/pdf-field-placer"
 import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
@@ -40,7 +41,7 @@ export default async function PdfFieldsPage({ params }: { params: Promise<{ docu
       <main className="mx-auto grid min-h-dvh max-w-md place-content-center gap-4 px-6 text-center">
         <h1 className="text-lg font-medium">Can&apos;t send this for signature</h1>
         <p className="text-sm text-muted-foreground">{loaded.message}</p>
-        <Link className={buttonVariants({ variant: "outline" })} href={back}>
+        <Link className={cn(buttonVariants({ variant: "outline" }))} href={back}>
           Back to the document
         </Link>
       </main>

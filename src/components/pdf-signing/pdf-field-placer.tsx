@@ -45,14 +45,14 @@ import { clamp, cn } from "@/lib/utils"
 import type { PdfFieldEditorView } from "@/services/pdf-signing-service"
 import type { PdfField, PdfFieldKind, PdfFieldLayout } from "@/types/pdf-fields"
 
-/** Each kind of field: its name, its mark, and its size when placed, in points. */
+/** Each kind of field: its name, its mark, and its size when placed, in points, about a signature line's height. */
 const FIELD_KINDS: ReadonlyArray<Readonly<{ icon: LucideIcon; kind: PdfFieldKind; label: string; size: readonly [number, number] }>> = [
-  { icon: FileSignature, kind: "signature", label: "Signature", size: [180, 44] },
-  { icon: CaseSensitive, kind: "initials", label: "Initials", size: [64, 40] },
-  { icon: Calendar, kind: "date", label: "Date", size: [110, 22] },
-  { icon: TextCursorInput, kind: "text", label: "Text", size: [180, 22] },
-  { icon: SquareCheck, kind: "checkbox", label: "Checkbox", size: [16, 16] },
-  { icon: Paperclip, kind: "attachment", label: "Attachment", size: [160, 26] },
+  { icon: FileSignature, kind: "signature", label: "Signature", size: [160, 30] },
+  { icon: CaseSensitive, kind: "initials", label: "Initials", size: [56, 26] },
+  { icon: Calendar, kind: "date", label: "Date", size: [96, 18] },
+  { icon: TextCursorInput, kind: "text", label: "Text", size: [160, 18] },
+  { icon: SquareCheck, kind: "checkbox", label: "Checkbox", size: [14, 14] },
+  { icon: Paperclip, kind: "attachment", label: "Attachment", size: [150, 20] },
 ]
 // pdf.js needs the browser's document, so the pages draw there only.
 const PdfPages = dynamic(() => import("@/components/pdf-signing/pdf-pages").then((module) => module.PdfPages), { ssr: false })
@@ -95,8 +95,12 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
     setSelected(null)
   }
 
-  /** Adds a field centred on a point of a page, given as fractions of it, and kept on the page. */
-  function add(kind: PdfFieldKind, pageNumber: number, at: { x: number; y: number }): string {
+  /**
+   * Adds a field at a point of a page, given as fractions of it, and kept on
+   * the page: centred across, and with its foot at the point when it is
+   * tapped, as people tap the line a signature goes on.
+   */
+  function add(kind: PdfFieldKind, pageNumber: number, at: { x: number; y: number }, foot = false): string {
     const page = shownSize(view.pages[pageNumber - 1]!)
     const [w, h] = KIND.get(kind)!.size
     const width = Math.min(1, w / page.width)
@@ -112,7 +116,7 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
       signerId: active.id,
       width,
       x: clamp(at.x - width / 2, 0, 1 - width),
-      y: clamp(at.y - height / 2, 0, 1 - height),
+      y: clamp(foot ? at.y - height : at.y - height / 2, 0, 1 - height),
     }
     setLayout((current) => ({ ...current, fields: [...current.fields, field] }))
     setSelected(field.id)
@@ -123,7 +127,7 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
   function place(pageNumber: number, event: ReactPointerEvent<HTMLDivElement>): void {
     if (!armed) return
     const rect = event.currentTarget.getBoundingClientRect()
-    add(armed, pageNumber, { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height })
+    add(armed, pageNumber, { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height }, true)
   }
 
   /** From the keyboard: in the middle of the page in view, focused so the arrow keys move it. */
@@ -232,7 +236,8 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
                       aria-label={`${kind.label} for ${owner?.name ?? "a signer"}${field.required ? "" : ", optional"}`}
                       aria-pressed={isSelected}
                       className={cn(
-                        "absolute flex touch-none items-center gap-1 overflow-hidden rounded-sm border-[1.5px] border-(--tone) bg-(--tone-soft) px-1 text-[11px] leading-none text-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                        // See-through, so the line and words under a field still show.
+                        "absolute flex touch-none items-center gap-1 overflow-hidden rounded-sm border-[1.5px] border-(--tone) bg-(--tone-soft)/65 px-1 text-[11px] leading-[1.2] text-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50",
                         editable && "cursor-move",
                         isSelected && "ring-2 ring-(--tone) ring-offset-1 ring-offset-card",
                         !field.required && "border-dashed"
@@ -377,12 +382,17 @@ function FieldTools({
   signers: PdfFieldLayout["signers"]
 }): ReactElement | null {
   if (!field) return null
+  const below = field.y + field.height < 0.9
 
   return (
     <div
-      className="absolute z-10 flex -translate-y-full items-center gap-1 rounded-full border border-border bg-popover p-0.5 pl-2 text-xs text-popover-foreground shadow-sm"
+      className={cn(
+        "absolute z-10 flex items-center gap-1 rounded-full border border-border bg-popover p-0.5 pl-2 text-xs text-popover-foreground shadow-sm",
+        below ? "translate-y-1.5" : "-translate-y-[calc(100%+6px)]"
+      )}
       onPointerDown={(event) => event.stopPropagation()}
-      style={{ left: `${Math.min(field.x, 0.6) * 100}%`, top: `calc(${field.y * 100}% - 6px)` }}
+      // Under the field, where the fields placed above it stay clear; over it at a page's foot.
+      style={{ left: `${Math.min(field.x, 0.6) * 100}%`, top: `${(below ? field.y + field.height : field.y) * 100}%` }}
     >
       <DropdownMenu>
         <DropdownMenuTrigger className="flex h-7 items-center gap-1 rounded-full px-1.5 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50">

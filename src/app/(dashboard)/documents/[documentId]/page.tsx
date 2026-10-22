@@ -15,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { SetupIncomplete } from "@/components/ui/page-state"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import {
   Card,
   CardContent,
@@ -575,7 +576,7 @@ function DocumentActionsCard({
         current?.contentType === "application/pdf" &&
         canPerformOrganizationAction(context.membership, "documents:send") ? (
           // The PDF as it is, with fields laid on it for each signer.
-          <Link className={buttonVariants({ variant: "outline" })} href={`/documents/${document.id}/fields`}>
+          <Link className={cn(buttonVariants({ variant: "outline" }))} href={`/documents/${document.id}/fields`}>
             <PenLine aria-hidden="true" />
             Send for signature
           </Link>

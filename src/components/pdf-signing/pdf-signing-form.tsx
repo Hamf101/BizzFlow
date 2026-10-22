@@ -100,7 +100,7 @@ export function PdfSigningForm({ token, view }: { token: string; view: PublicPdf
 
                 return (
                   <div
-                    className="absolute flex items-center overflow-hidden rounded-sm border border-dashed border-border bg-muted/70 px-1 text-[11px] text-muted-foreground"
+                    className="absolute flex items-center overflow-hidden rounded-sm border border-dashed border-border bg-muted/30 px-1 text-[11px] leading-[1.2] text-muted-foreground"
                     data-slot="pdf-field-other"
                     key={field.id}
                     style={box}
@@ -111,7 +111,8 @@ export function PdfSigningForm({ token, view }: { token: string; view: PublicPdf
               }
 
               const tone = signerTone(signerIndex.get(field.signerId) ?? 0)
-              const live = "absolute rounded-sm border-[1.5px] border-(--tone) bg-(--tone-soft) text-[12px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              // See-through, so the line under a field still shows; small type fits a field drawn to a line's height.
+              const live = "absolute min-w-0 rounded-sm border-[1.5px] border-(--tone) bg-(--tone-soft)/65 text-[11px] leading-[1.2] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:text-[12px]"
               const label = `${field.label ?? field.kind}${field.required ? "" : " (optional)"}`
 
               if (DRAWN.has(field.kind)) {
@@ -173,13 +174,21 @@ export function PdfSigningForm({ token, view }: { token: string; view: PublicPdf
               return (
                 <input
                   aria-label={label}
-                  className={cn(live, "px-1.5")}
+                  className={cn(live, "px-1 [&::-webkit-calendar-picker-indicator]:ml-0 [&::-webkit-calendar-picker-indicator]:w-3")}
                   data-fill={field.id}
                   key={field.id}
                   maxLength={500}
                   onChange={(event) => set(field.id, event.target.value)}
                   placeholder={field.kind === "date" ? undefined : (field.label ?? "Type here")}
-                  style={{ ...box, ...tone }}
+                  // A date control needs its own width to show the whole date; it grows past a short line rather than cut it off.
+                  style={{
+                    ...box,
+                    ...tone,
+                    // On the page's right half it grows leftwards, so it stays on the page.
+                    ...(field.kind === "date"
+                      ? { minWidth: box.width, width: "auto", ...(field.x > 0.5 ? { left: "auto", right: `${(1 - field.x - field.width) * 100}%` } : null) }
+                      : null),
+                  }}
                   type={field.kind === "date" ? "date" : "text"}
                   value={typeof values[field.id] === "string" ? (values[field.id] as string) : ""}
                 />
