@@ -16,6 +16,17 @@ export type FinalizeGeneratedDocumentPdfInput = {
   documentId: string
 }
 
+/**
+ * What a document's final PDF is made from: whether the document is complete,
+ * a fingerprint of everything that goes into it, and how to make it.
+ */
+export type PreparedFinalRender = Readonly<{
+  completed: boolean
+  filename: string
+  render: (metadataTimestamp: string) => Promise<Uint8Array>
+  sha256: string
+}>
+
 /** Stable identifiers returned after an immutable final PDF is promoted. */
 export type FinalizeGeneratedDocumentPdfResult = {
   finalizationId: string

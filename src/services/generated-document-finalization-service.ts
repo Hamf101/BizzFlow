@@ -15,6 +15,7 @@ import type {
   GeneratedDocumentFinalizationServiceDeps,
   GeneratedDocumentFinalizationStorage,
   GeneratedDocumentSigningViewLoader,
+  PreparedFinalRender,
 } from "./generated-document-finalization/contracts"
 import {
   assertFinalizationStorageKey,
@@ -35,6 +36,7 @@ export type {
   FinalizeGeneratedDocumentPdfInput,
   FinalizeGeneratedDocumentPdfResult,
   GeneratedDocumentFinalizationServiceDeps,
+  PreparedFinalRender,
 } from "./generated-document-finalization/contracts"
 
 /**
@@ -57,6 +59,56 @@ export async function finalizeGeneratedDocumentPdf(
   input: FinalizeGeneratedDocumentPdfInput,
   deps: GeneratedDocumentFinalizationServiceDeps = {}
 ): Promise<FinalizeGeneratedDocumentPdfResult> {
+  return finalizeDocumentPdf(input, deps, (getClient) => {
+    const loadSigningView = deps.loadSigningView ?? createDefaultSigningViewLoader(getClient())
+
+    return async (): Promise<PreparedFinalRender> => {
+      const view = await loadSigningView(input)
+
+      if (
+        view.document.id !== input.documentId ||
+        view.document.organizationId !== input.organizationId
+      ) {
+        throw new GeneratedDocumentFinalizationServiceError(
+          "Generated document view does not match this finalization request.",
+          500
+        )
+      }
+
+      const canonicalRender = buildCanonicalFinalizationRenderInput(view)
+
+      return {
+        completed: view.workflowStatus === "completed",
+        filename: normalizeFinalPdfFilename(view.document.title),
+        render: (metadataTimestamp: string) =>
+          (deps.renderPdf ?? renderGeneratedDocumentPdf)(
+            { ...canonicalRender.input, metadataTimestamp },
+            // Stored pictures never change once uploaded, so the final PDF stays reproducible.
+            { readImage: (asset) => readTemplateImage(input.organizationId, asset) }
+          ),
+        sha256: canonicalRender.sha256,
+      }
+    }
+  })
+}
+
+/**
+ * Finalizes a completed document into one immutable private PDF, made by the
+ * given source: allocated, stored once and promoted to the document's newest
+ * version, exactly as a generated document is.
+ *
+ * @param input - Actor, organization, and document identifiers.
+ * @param deps - Optional persistence, storage, ID, and clock ports.
+ * @param source - Given the database, what the final PDF is made from.
+ * @returns Stable finalization and document-version identifiers.
+ * @throws GeneratedDocumentFinalizationServiceError for access, state, storage,
+ * rendering, or persistence failures.
+ */
+export async function finalizeDocumentPdf(
+  input: FinalizeGeneratedDocumentPdfInput,
+  deps: GeneratedDocumentFinalizationServiceDeps,
+  source: (getClient: () => AdminSupabaseClient) => () => Promise<PreparedFinalRender>
+): Promise<FinalizeGeneratedDocumentPdfResult> {
   const clock = deps.clock ?? performance.now.bind(performance)
   const startedAt = clock()
   let finalizationId: string | undefined
@@ -68,8 +120,7 @@ export async function finalizeGeneratedDocumentPdf(
     const persistence =
       deps.persistence ??
       createSupabaseFinalizationPersistence(getClient())
-    const loadSigningView =
-      deps.loadSigningView ?? createDefaultSigningViewLoader(getClient())
+    const loadRender = source(getClient)
     const storage = deps.storage ?? createDefaultStorage(deps)
 
     await persistence.requireViewPermission(input)
@@ -98,26 +149,15 @@ export async function finalizeGeneratedDocumentPdf(
       }
     }
 
-    const view = await loadSigningView(input)
+    const canonicalRender = await loadRender()
 
-    if (
-      view.document.id !== input.documentId ||
-      view.document.organizationId !== input.organizationId
-    ) {
+    if (!canonicalRender.completed) {
       throw new GeneratedDocumentFinalizationServiceError(
-        "Generated document view does not match this finalization request.",
-        500
-      )
-    }
-
-    if (view.workflowStatus !== "completed") {
-      throw new GeneratedDocumentFinalizationServiceError(
-        "Only completed generated documents can be finalized.",
+        "Only completed documents can be finalized.",
         409
       )
     }
 
-    const canonicalRender = buildCanonicalFinalizationRenderInput(view)
     // A pending attempt from different render input (one prepared before
     // signers were ordered by signer number) is never reused: prepare discards
     // it, and its object, if stored, stays under its own key.
@@ -162,15 +202,10 @@ export async function finalizeGeneratedDocumentPdf(
       return result
     }
 
-    const pdf = await (deps.renderPdf ?? renderGeneratedDocumentPdf)(
-      {
-        ...canonicalRender.input,
-        metadataTimestamp: normalizeFinalizationMetadataTimestamp(
-          prepared.createdAt
-        ),
-      },
-      // Stored pictures never change once uploaded, so the final PDF stays reproducible.
-      { readImage: (asset) => readTemplateImage(input.organizationId, asset) }
+    const pdf = Buffer.from(
+      await canonicalRender.render(
+        normalizeFinalizationMetadataTimestamp(prepared.createdAt)
+      )
     )
 
     if (pdf.length < 1) {
@@ -197,7 +232,7 @@ export async function finalizeGeneratedDocumentPdf(
       finalizationId: prepared.id,
       pdfSha256,
       byteSize: pdf.length,
-      originalFilename: normalizeFinalPdfFilename(view.document.title),
+      originalFilename: canonicalRender.filename,
       finalizedBy: input.actorUserId,
     })
 

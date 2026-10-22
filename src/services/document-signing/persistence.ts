@@ -36,7 +36,7 @@ import {
 const ANSWER_COLUMNS =
   "document_id,org_id,values,workflow_status,created_at,updated_at"
 const RECIPIENT_COLUMNS =
-  "id,org_id,document_id,user_id,name,email,requires_signature,status,token_hash,token_expires_at,invited_at,viewed_at,signed_at,signature_data,initials_data,sent_by,consented_at,signed_ip"
+  "id,org_id,document_id,user_id,signer_id,name,email,requires_signature,status,token_hash,token_expires_at,invited_at,viewed_at,signed_at,signature_data,initials_data,sent_by,consented_at,signed_ip"
 
 type OrganizationRow = {
   name: string

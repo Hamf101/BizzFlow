@@ -10,7 +10,7 @@ declare
   owner_id uuid := gen_random_uuid();
   organization_id uuid := gen_random_uuid();
   document_id uuid := gen_random_uuid();
-  signer_id uuid := gen_random_uuid();
+  signer_recipient_id uuid := gen_random_uuid();
   signer_token text := encode(sha256('expected-base-token'::bytea), 'hex');
   drawing jsonb := '{"dataUrl": "data:image/png;base64,iVBORw0KGgo="}';
   snapshot jsonb := jsonb_build_object(
@@ -87,13 +87,13 @@ begin
   where answer.document_id = expected_base_test.document_id;
 
   insert into public.document_signing_recipients (id, org_id, document_id, name, email, token_hash, token_expires_at)
-  values (signer_id, organization_id, document_id, 'Signer', 'signer@example.invalid', signer_token, now() + interval '1 day');
+  values (signer_recipient_id, organization_id, document_id, 'Signer', 'signer@example.invalid', signer_token, now() + interval '1 day');
 
   begin
     perform public.complete_document_recipient_signature(
       target_org_id => organization_id,
       target_document_id => document_id,
-      target_recipient_id => signer_id,
+      target_recipient_id => signer_recipient_id,
       target_token_hash => signer_token,
       target_values => '{"a": "4", "total": "7"}',
       target_signature_data => drawing,
@@ -104,14 +104,14 @@ begin
   exception when sqlstate '40001' then null;
   end;
 
-  if (select status from public.document_signing_recipients where id = signer_id) <> 'pending' then
+  if (select status from public.document_signing_recipients where id = signer_recipient_id) <> 'pending' then
     raise exception 'A refused signature was recorded.';
   end if;
 
   perform public.complete_document_recipient_signature(
     target_org_id => organization_id,
     target_document_id => document_id,
-    target_recipient_id => signer_id,
+    target_recipient_id => signer_recipient_id,
     target_token_hash => signer_token,
     target_values => '{"a": "4", "total": "7"}',
     target_signature_data => drawing,

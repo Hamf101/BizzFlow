@@ -373,6 +373,32 @@ export type WorkingCopyUpdateRow = Record<string, unknown> & {
 type WorkingCopyRoomInsert = Pick<WorkingCopyRoomRow, "id" | "org_id" | "saved_hash" | "state"> &
   Partial<Pick<WorkingCopyRoomRow, "document_id" | "template_id">>
 
+type DocumentPdfLayoutRow = Record<string, unknown> & {
+  document_id: string
+  org_id: string
+  version_id: string
+  pages: unknown
+  layout: unknown
+  revision: number
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+type DocumentSigningAttachmentRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  document_id: string
+  recipient_id: string
+  field_id: string
+  storage_key: string
+  original_filename: string
+  content_type: string
+  byte_size: number
+  status: "available" | "upload_pending"
+  created_at: string
+}
+
 type WorkingCopyCheckpointRow = Record<string, unknown> & {
   id: string
   org_id: string
@@ -645,6 +671,16 @@ export type AdminDatabase = {
         Pick<WorkingCopyCommentRow, "resolved_at" | "resolved_by">
       >
       working_copy_messages: DatabaseTable<WorkingCopyChatRow, Omit<WorkingCopyChatRow, "created_at">, never>
+      document_pdf_layouts: DatabaseTable<
+        DocumentPdfLayoutRow,
+        Omit<DocumentPdfLayoutRow, "created_at" | "updated_at">,
+        Partial<Pick<DocumentPdfLayoutRow, "layout" | "revision" | "updated_at" | "updated_by">>
+      >
+      document_signing_attachments: DatabaseTable<
+        DocumentSigningAttachmentRow,
+        Omit<DocumentSigningAttachmentRow, "created_at" | "status">,
+        Pick<DocumentSigningAttachmentRow, "status">
+      >
       template_flow_messages: DatabaseTable<
         TemplateFlowMessageRow,
         TemplateFlowMessageInsert,
@@ -1050,6 +1086,18 @@ export type AdminDatabase = {
           target_actor_user_id: string
         }
         Returns: boolean
+      }
+      complete_pdf_recipient_signature: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_recipient_id: string
+          target_token_hash: string
+          target_values: Record<string, unknown>
+          target_signature_data: Record<string, unknown> | null
+          target_initials_data: Record<string, unknown> | null
+        }
+        Returns: string
       }
       complete_document_recipient_signature: {
         Args: {

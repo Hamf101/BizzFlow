@@ -501,126 +501,18 @@ export async function sendDocumentForSigning(
         view.answers,
         view.recipients.length + recipients.length
       )
-      const now = getSigningNow(deps.now)
-      const expiresAt = new Date(now.getTime() + TOKEN_LIFETIME_MS).toISOString()
-      const createId = deps.createId ?? randomUUID
-      const createToken = deps.createToken ?? createSecureToken
-      const pendingInvitations = recipients.map(
-        (recipient): PendingInvitation => {
-          const id = createId()
-          const token = createToken()
-
-          assertSecureToken(token)
-          return {
-            id,
-            token,
-            row: {
-              id,
-              org_id: input.organizationId,
-              document_id: input.documentId,
-              user_id: recipient.userId,
-              name: recipient.name,
-              email: recipient.email,
-              requires_signature: recipient.requiresSignature,
-              status: "pending",
-              token_hash: hashToken(token),
-              token_expires_at: expiresAt,
-              invited_at: now.toISOString(),
-              viewed_at: null,
-              signed_at: null,
-              signature_data: null,
-              initials_data: null,
-              sent_by: input.actorUserId,
-            },
-          }
-        }
-      )
-      const createdRows = await insertSigningRecipients(
+      const { rows: createdRows, undelivered: failedDeliveries } = await inviteSigningRecipients(
         client,
-        pendingInvitations.map(
-          (invitation: PendingInvitation): DocumentSigningRecipientRow =>
-            invitation.row
-        )
-      )
-
-      let workflowStarted: boolean
-
-      try {
-        workflowStarted = await startSigningWorkflow(
-          client,
-          input.organizationId,
-          input.documentId
-        )
-      } catch (error: unknown) {
-        await cleanupRecipients(
-          client,
-          input.organizationId,
-          pendingInvitations.map(
-            (invitation: PendingInvitation): string => invitation.id
-          )
-        )
-        throw error
-      }
-
-      if (!workflowStarted) {
-        await cleanupRecipients(
-          client,
-          input.organizationId,
-          pendingInvitations.map(
-            (invitation: PendingInvitation): string => invitation.id
-          )
-        )
-        throw new DocumentSigningServiceError(
-          "The document completed before signing invitations could be added.",
-          409
-        )
-      }
-
-      const createdById = new Map<string, DocumentSigningRecipientRow>(
-        createdRows.map(
-          (
-            row: DocumentSigningRecipientRow
-          ): [string, DocumentSigningRecipientRow] => [row.id, row]
-        )
-      )
-      const sendEmail =
-        deps.sendDocumentSigningEmail ?? defaultSendDocumentSigningEmail
-      const deliveries = await Promise.allSettled(
-        pendingInvitations.map(
-          async (invitation: PendingInvitation): Promise<void> => {
-            const recipient = createdById.get(invitation.id)
-
-            if (!recipient) {
-              throw new DocumentSigningServiceError(
-                "A created recipient could not be loaded.",
-                500
-              )
-            }
-
-            await sendEmail({
-              documentId: input.documentId,
-              documentTitle: view.document.title,
-              organizationName: view.organizationName,
-              recipientEmail: recipient.email,
-              recipientId: recipient.id,
-              recipientName: recipient.name,
-              token: invitation.token,
-            })
-          }
-        )
-      )
-      const failedDeliveries = deliveries.filter(
-        (delivery): boolean => delivery.status === "rejected"
-      ).length
-
-      if (failedDeliveries > 0) {
-        console.warn("document_signing_email_batch_incomplete", {
-          organizationId: input.organizationId,
+        {
           documentId: input.documentId,
-          recipientCount: createdRows.length,
-          failedDeliveries,
-        })
-      }
+          documentTitle: view.document.title,
+          invitees: recipients,
+          organizationId: input.organizationId,
+          organizationName: view.organizationName,
+          sentBy: input.actorUserId,
+        },
+        deps
+      )
 
       // The round is saved and out for signing either way; an email that did
       // not go is counted, not thrown, so no one sends the document again.
@@ -632,6 +524,167 @@ export async function sendDocumentForSigning(
       }
     }
   )
+}
+
+/** Someone to invite to sign, and whether they must draw a signature. */
+export type SigningInvitee = Readonly<{
+  email: string
+  name: string
+  requiresSignature: boolean
+  /** The role they fill on an uploaded PDF. */
+  signerId?: string | null
+  userId: string | null
+}>
+
+/**
+ * Invites each person to sign through their own private link: their rows, the
+ * document's move to awaiting signatures, and an email each. When the
+ * document completed first, nothing is left behind.
+ *
+ * @param client - Signing persistence client.
+ * @param input - The document, its title and organization, and who to invite.
+ * @param deps - Optional id, token, clock and email dependencies.
+ * @returns The created recipient rows, and how many of their emails could not be sent.
+ * @throws DocumentSigningServiceError when the workflow cannot start.
+ */
+export async function inviteSigningRecipients(
+  client: SigningServiceClient,
+  input: Readonly<{
+    documentId: string
+    documentTitle: string
+    invitees: readonly SigningInvitee[]
+    organizationId: string
+    organizationName: string
+    /** Who sent it, told when a signer turns it down. */
+    sentBy: string
+  }>,
+  deps: DocumentSigningServiceDeps
+): Promise<{ rows: DocumentSigningRecipientRow[]; undelivered: number }> {
+  const now = getSigningNow(deps.now)
+  const expiresAt = new Date(now.getTime() + TOKEN_LIFETIME_MS).toISOString()
+  const createId = deps.createId ?? randomUUID
+  const createToken = deps.createToken ?? createSecureToken
+  const pendingInvitations = input.invitees.map(
+    (recipient: SigningInvitee): PendingInvitation => {
+      const id = createId()
+      const token = createToken()
+
+      assertSecureToken(token)
+      return {
+        id,
+        token,
+        row: {
+          id,
+          org_id: input.organizationId,
+          document_id: input.documentId,
+          user_id: recipient.userId,
+          signer_id: recipient.signerId ?? null,
+          name: recipient.name,
+          email: recipient.email,
+          requires_signature: recipient.requiresSignature,
+          status: "pending",
+          token_hash: hashToken(token),
+          token_expires_at: expiresAt,
+          invited_at: now.toISOString(),
+          viewed_at: null,
+          signed_at: null,
+          signature_data: null,
+          initials_data: null,
+          sent_by: input.sentBy,
+        },
+      }
+    }
+  )
+  const createdRows = await insertSigningRecipients(
+    client,
+    pendingInvitations.map(
+      (invitation: PendingInvitation): DocumentSigningRecipientRow =>
+        invitation.row
+    )
+  )
+
+  let workflowStarted: boolean
+
+  try {
+    workflowStarted = await startSigningWorkflow(
+      client,
+      input.organizationId,
+      input.documentId
+    )
+  } catch (error: unknown) {
+    await cleanupRecipients(
+      client,
+      input.organizationId,
+      pendingInvitations.map(
+        (invitation: PendingInvitation): string => invitation.id
+      )
+    )
+    throw error
+  }
+
+  if (!workflowStarted) {
+    await cleanupRecipients(
+      client,
+      input.organizationId,
+      pendingInvitations.map(
+        (invitation: PendingInvitation): string => invitation.id
+      )
+    )
+    throw new DocumentSigningServiceError(
+      "The document completed before signing invitations could be added.",
+      409
+    )
+  }
+
+  const createdById = new Map<string, DocumentSigningRecipientRow>(
+    createdRows.map(
+      (
+        row: DocumentSigningRecipientRow
+      ): [string, DocumentSigningRecipientRow] => [row.id, row]
+    )
+  )
+  const sendEmail =
+    deps.sendDocumentSigningEmail ?? defaultSendDocumentSigningEmail
+  const deliveries = await Promise.allSettled(
+    pendingInvitations.map(
+      async (invitation: PendingInvitation): Promise<void> => {
+        const recipient = createdById.get(invitation.id)
+
+        if (!recipient) {
+          throw new DocumentSigningServiceError(
+            "A created recipient could not be loaded.",
+            500
+          )
+        }
+
+        await sendEmail({
+          documentId: input.documentId,
+          documentTitle: input.documentTitle,
+          organizationName: input.organizationName,
+          recipientEmail: recipient.email,
+          recipientId: recipient.id,
+          recipientName: recipient.name,
+          token: invitation.token,
+        })
+      }
+    )
+  )
+  const failedDeliveries = deliveries.filter(
+    (delivery): boolean => delivery.status === "rejected"
+  ).length
+
+  if (failedDeliveries > 0) {
+    console.warn("document_signing_email_batch_incomplete", {
+      organizationId: input.organizationId,
+      documentId: input.documentId,
+      recipientCount: createdRows.length,
+      failedDeliveries,
+    })
+  }
+
+  // The round is saved and out for signing either way; an email that did
+  // not go is counted, not thrown, so no one sends the document again.
+  return { rows: createdRows, undelivered: failedDeliveries }
 }
 
 /**
@@ -1079,7 +1132,7 @@ async function retryOnChangedAnswers<T>(attempt: () => Promise<T>): Promise<T> {
   }
 }
 
-async function requireMemberDocumentAccess(
+export async function requireMemberDocumentAccess(
   client: SigningServiceClient,
   organizationId: string,
   documentId: string,
@@ -1113,7 +1166,7 @@ function asSigningError<T>(access: Promise<T>, rejectionMessage: string): Promis
   )
 }
 
-async function requireMemberSigningDocumentLifecycle(
+export async function requireMemberSigningDocumentLifecycle(
   client: SigningServiceClient,
   organizationId: string,
   documentId: string,
@@ -1131,7 +1184,7 @@ async function requireMemberSigningDocumentLifecycle(
 
 // A private link obeys the member lifecycle rule, but a removed document must
 // look exactly like an invalid link, so its holder learns nothing more.
-async function requirePublicSigningDocumentLifecycle(
+export async function requirePublicSigningDocumentLifecycle(
   client: SigningServiceClient,
   recipient: { document_id: string; org_id: string },
   operation: "read" | "mutation"

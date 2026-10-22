@@ -300,7 +300,7 @@ describe("generated document finalization service", () => {
         createId: () => FINALIZATION_ID,
       })
     ).rejects.toMatchObject({
-      message: "Only completed generated documents can be finalized.",
+      message: "Only completed documents can be finalized.",
       statusCode: 409,
     })
 

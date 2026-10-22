@@ -1271,6 +1271,8 @@ export type DocumentSigningRecipientRow = Record<string, unknown> & {
   org_id: string
   document_id: string
   user_id: string | null
+  /** The role they fill on an uploaded PDF; none for a generated document. */
+  signer_id?: string | null
   name: string
   email: string
   requires_signature: boolean

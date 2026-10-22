@@ -1,6 +1,9 @@
 import { createRouteErrorResponse } from "@/app/api/_route-error"
 import { getRequiredString } from "@/lib/request-security"
 import { DocumentServiceError } from "@/services/document-service"
+import { DocumentSigningServiceError } from "@/services/document-signing-service"
+import { GeneratedDocumentFinalizationServiceError } from "@/services/generated-document-finalization-service"
+import { OrganizationServiceError } from "@/services/organization-service"
 
 /**
  * Reads an optional string field from a parsed JSON body.
@@ -83,6 +86,6 @@ export function createDocumentRouteErrorResponse(
   return createRouteErrorResponse(error, routeName, {
     event: "document_route",
     failure: "Document request failed.",
-    known: [DocumentServiceError],
+    known: [DocumentServiceError, DocumentSigningServiceError, GeneratedDocumentFinalizationServiceError, OrganizationServiceError],
   })
 }
