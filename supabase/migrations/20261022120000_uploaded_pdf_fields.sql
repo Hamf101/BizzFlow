@@ -18,8 +18,9 @@ create table public.document_pdf_layouts (
   unique (document_id, org_id),
   foreign key (document_id, org_id)
     references public.documents (id, org_id) on delete cascade,
+  -- A version goes only with its document, which takes these fields with it.
   foreign key (version_id, document_id)
-    references public.document_versions (id, document_id)
+    references public.document_versions (id, document_id) on delete cascade
 );
 
 create index document_pdf_layouts_org_idx on public.document_pdf_layouts (org_id);
