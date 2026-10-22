@@ -377,6 +377,7 @@ function PersonPanel({
           emptyLabel="Nobody"
           label="Reports to"
           onValueChange={(managerUserId) => save([{ kind: "set_manager", managerUserId: managerUserId || null, userId: member.userId }])}
+          placeholder="Search people"
           options={members
             .filter((other) => other.userId !== member.userId)
             .map((other) => ({ hint: other.email === name(other.userId) ? undefined : other.email, label: name(other.userId), value: other.userId }))}

@@ -74,7 +74,8 @@ export function NewTaskDialog({
             {canAssign ? (
               <Field className="sm:flex-1">
                 <FieldLabel htmlFor="new-task-assignee">Assignee</FieldLabel>
-                <SearchSelect defaultValue="" emptyLabel="Unassigned" id="new-task-assignee" name="assignedTo" options={memberOptions(members)} />
+                <SearchSelect defaultValue="" emptyLabel="Unassigned" id="new-task-assignee" name="assignedTo" options={memberOptions(members)}
+                  placeholder="Search people" />
               </Field>
             ) : null}
           </div>

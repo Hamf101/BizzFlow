@@ -354,6 +354,7 @@ function TaskAssignmentPanel({
                   id="task-assignee"
                   name="assignedTo"
                   options={memberOptions(members)}
+                  placeholder="Search people"
                 />
                 <Button type="submit" variant="outline">
                   <UserRoundCheck />
@@ -509,6 +510,7 @@ function TaskRemindersPanel({
                 id="reminder-recipient"
                 name="recipientUserId"
                 options={memberOptions(members)}
+                  placeholder="Search people"
               />
             </Field>
             <Field>

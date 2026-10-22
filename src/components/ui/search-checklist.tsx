@@ -37,7 +37,7 @@ export function SearchChecklist({
           aria-label={`Search ${label.toLowerCase()}`}
           className="mb-1"
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Type to narrow the list"
+          placeholder="Search people"
           type="search"
           value={query}
         />

@@ -148,7 +148,8 @@ export function SubmissionTaskPanel({
                       <FieldLabel htmlFor="submission-task-assignee">
                         Assignee
                       </FieldLabel>
-                      <SearchSelect defaultValue="" emptyLabel="Leave unassigned" id="submission-task-assignee" name="assignedTo" options={memberOptions(members)} />
+                      <SearchSelect defaultValue="" emptyLabel="Leave unassigned" id="submission-task-assignee" name="assignedTo" options={memberOptions(members)}
+                  placeholder="Search people" />
                       <FieldDescription>
                         Emailed when the task is handed over.
                       </FieldDescription>
