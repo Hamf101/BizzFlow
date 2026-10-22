@@ -175,7 +175,7 @@ export function PdfSigningForm({ token, view }: { token: string; view: PublicPdf
                     style={{ ...box, ...tone }}
                     tabIndex={-1}
                   >
-                    {filled(values[field.id]) ? <Check aria-hidden="true" className="size-3.5 shrink-0" /> : <Paperclip aria-hidden="true" className="size-3.5 shrink-0" />}
+                    {filled(values[field.id]) ? <Check aria-hidden="true" className="size-2 shrink-0 md:size-2.5" /> : <Paperclip aria-hidden="true" className="size-2 shrink-0 md:size-2.5" />}
                     <span className="truncate">
                       {uploading === field.id ? "Uploading…" : attachError === field.id ? "Didn't upload. Try again" : names[field.id] || "Attach a file"}
                     </span>

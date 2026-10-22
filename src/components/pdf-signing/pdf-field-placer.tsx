@@ -281,7 +281,7 @@ export function PdfFieldPlacer({ view }: { view: PdfFieldEditorView }): ReactEle
                       }}
                       tabIndex={0}
                     >
-                      <kind.icon aria-hidden="true" className="size-3 shrink-0 text-(--tone)" />
+                      <kind.icon aria-hidden="true" className="size-2 shrink-0 text-(--tone) md:size-2.5" />
                       {field.kind === "checkbox" ? null : <span className="min-w-0 truncate @max-[48px]:hidden">{field.label ?? kind.label}</span>}
                       {isSelected && editable
                         ? HANDLES.map((handle) => (
