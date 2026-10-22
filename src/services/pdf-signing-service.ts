@@ -8,7 +8,6 @@ export {
   getPublicPdfSigningView,
   type PdfFieldEditorView,
   type PdfPage,
-  type PdfSigningDeps,
   type PublicPdfSigningView,
   readPdfForPlacing,
   readPdfForSigning,

@@ -510,3 +510,26 @@
   .org-tree li:first-child::before, .org-tree li:last-child::after { border-top: 0; }
   .org-tree li:only-child::before { display: none; }
 }
+
+/*
+ * Signer tones (uploaded-PDF signing): each signer's fields carry one hue, so
+ * the sender and every signer see at a glance whose field is whose. Six tones;
+ * a seventh signer starts the row again. --signer-N is the edge and dot,
+ * --signer-N-soft the fill, readable under --foreground in both themes.
+ */
+:root {
+  --signer-1: #6f5a8a; --signer-1-soft: #ece6f3;
+  --signer-2: #1f7a62; --signer-2-soft: #dff1ea;
+  --signer-3: #a5552f; --signer-3-soft: #f8e6dc;
+  --signer-4: #3a6aa3; --signer-4-soft: #e2ecf8;
+  --signer-5: #93406a; --signer-5-soft: #f6e1ec;
+  --signer-6: #7a6a1f; --signer-6-soft: #f2edd6;
+}
+.dark {
+  --signer-1: #b9a3d4; --signer-1-soft: #352c40;
+  --signer-2: #6fcfac; --signer-2-soft: #1d3830;
+  --signer-3: #eb9b74; --signer-3-soft: #43291d;
+  --signer-4: #8ab6ea; --signer-4-soft: #1f3048;
+  --signer-5: #e294bc; --signer-5-soft: #432433;
+  --signer-6: #d8c674; --signer-6-soft: #3b3519;
+}

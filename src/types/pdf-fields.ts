@@ -69,8 +69,6 @@ export const pdfFieldLayoutSchema = z
 /** One field. */
 export type PdfField = z.infer<typeof pdfFieldSchema>
 
-/** One signer's role. */
-export type PdfSigner = z.infer<typeof pdfSignerSchema>
 
 /** A PDF's signers and fields. */
 export type PdfFieldLayout = z.infer<typeof pdfFieldLayoutSchema>

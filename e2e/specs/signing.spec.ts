@@ -69,7 +69,8 @@ test.describe("signing", () => {
     await page.getByRole("checkbox", { name: /I agree to sign electronically/ }).check()
     await page.getByRole("button", { name: "Submit signature" }).click()
 
-    await expect(page.getByText(/your signature is recorded/i)).toBeVisible()
+    // The confirmation after signing, not the hint shown before it.
+    await expect(page.getByText("Your signature was recorded", { exact: false })).toBeVisible()
 
     await expect
       .poll(async (): Promise<string | undefined> => {
@@ -319,7 +320,8 @@ async function signAs(browser: Browser, token: string, title: string): Promise<v
   await drawSignature(page, "Signature drawing area")
   await page.getByRole("checkbox", { name: /I agree to sign electronically/ }).check()
   await page.getByRole("button", { name: "Submit signature" }).click()
-  await expect(page.getByText(/your signature is recorded/i)).toBeVisible()
+  // The confirmation after signing, not the hint shown before it.
+  await expect(page.getByText("Your signature was recorded", { exact: false })).toBeVisible()
   await context.close()
 }
 

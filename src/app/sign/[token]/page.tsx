@@ -5,6 +5,7 @@ import type { ReactElement } from "react"
 
 import { BizFlowWordmark } from "@/components/brand/bizflow-mark"
 import { DeclineSigningForm } from "@/components/documents/decline-signing-form"
+import { PdfSigningForm } from "@/components/pdf-signing/pdf-signing-form"
 import { PublicDocumentSigningForm } from "@/components/documents/public-document-signing-form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -25,6 +26,7 @@ import {
   SigningWorkflowBadge,
 } from "@/lib/page-status-badges"
 import { getPublicDocumentSigningView } from "@/services/document-signing-service"
+import { getPublicPdfSigningView, readSigningLinkKind } from "@/services/pdf-signing-service"
 import { withTemplateImageUrls } from "@/services/template-image-service"
 import type {
   PublicDocumentSigningView,
@@ -62,7 +64,14 @@ export default async function PublicSigningPage({
   searchParams: PublicSigningSearchParams
 }): Promise<ReactElement> {
   const [{ token }, query] = await Promise.all([params, searchParams])
-  const viewResult = (await isSigningViewAllowed())
+  const allowed = await isSigningViewAllowed()
+
+  // An uploaded PDF is signed as it is, on its own screen; a bad link reads as a generated one, which refuses it.
+  if (allowed && (await readSigningLinkKind({ token }).catch(() => "generated")) === "upload") {
+    return <PublicPdfSigning query={query} token={token} />
+  }
+
+  const viewResult = allowed
     ? await getPublicDocumentSigningView({ token })
         .then(async (view: PublicDocumentSigningView) => ({
           // The token was checked, so its pictures get addresses the signer can load.
@@ -177,6 +186,56 @@ export default async function PublicSigningPage({
       <div className="mx-auto w-full max-w-6xl empty:hidden">
         {!isRecipientSigned && view.workflowStatus === "awaiting_signatures" ? <DeclineSigningForm token={token} /> : null}
       </div>
+    </PublicSigningShell>
+  )
+}
+
+async function PublicPdfSigning({
+  query,
+  token,
+}: {
+  query: Awaited<PublicSigningSearchParams>
+  token: string
+}): Promise<ReactElement> {
+  const view = await getPublicPdfSigningView({ token }).catch((error: unknown) => {
+    // The private token and token-derived path must never enter logs.
+    console.warn("public_pdf_signing_view_failed", { reason: getPageErrorMessage(error, "unavailable") })
+    return null
+  })
+
+  if (!view) {
+    return (
+      <PublicSigningShell query={query}>
+        <Alert className="mx-auto w-full max-w-xl" variant="destructive">
+          <AlertTitle>Signing link unavailable</AlertTitle>
+          <AlertDescription>The private link may be invalid, expired, or replaced by a newer invitation. Ask the sender to resend it.</AlertDescription>
+        </Alert>
+      </PublicSigningShell>
+    )
+  }
+
+  const waitingFor = view.signers.filter((signer) => signer.status !== "signed").map((signer) => signer.recipientName ?? signer.name)
+
+  return (
+    <PublicSigningShell query={query}>
+      <section className="mx-auto flex w-full max-w-[820px] flex-col gap-1">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <LockKeyhole aria-hidden="true" className="size-4" />
+          {view.organizationName} sent this to {view.recipient.name}
+        </div>
+        <h1 className="text-2xl font-semibold tracking-normal">{view.documentTitle}</h1>
+        {view.workflowStatus === "completed" ? (
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <CheckCircle2 aria-hidden="true" className="size-4 text-primary" />
+            Everyone has signed. A link to the signed copy is on its way by email.
+          </p>
+        ) : view.recipient.status === "signed" ? (
+          <p className="text-sm text-muted-foreground">You&apos;ve signed. Waiting for {waitingFor.join(" and ")}.</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">Fill in your fields in colour; the grey ones are for someone else.</p>
+        )}
+      </section>
+      <PdfSigningForm token={token} view={view} />
     </PublicSigningShell>
   )
 }

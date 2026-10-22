@@ -18,6 +18,7 @@ import {
   DocumentSigningServiceError,
 } from "@/services/document-signing-service"
 import { finalizeCompletedGeneratedDocument } from "@/services/generated-document-finalization-service"
+import { completePublicPdfSigning, finalizeSignedUpload } from "@/services/pdf-signing-service"
 import type { GeneratedDocumentWorkflowStatus } from "@/types/template"
 
 /**
@@ -87,6 +88,62 @@ export async function completePublicSigningAction(
         workflowStatus === "completed"
           ? "Your signature was recorded. All parties have signed."
           : "Your signature was recorded. The document is waiting for the other parties.",
+    })
+  )
+}
+
+/**
+ * Completes one signer's fields on an uploaded PDF. The raw private token goes
+ * only to the service and the redirect, never to logs.
+ *
+ * @param _previous - What the last try reported.
+ * @param formData - Private token, consent, the signer's values as JSON, and their drawings.
+ * @returns Why it could not be signed, so the page keeps what was filled in;
+ *   signing redirects to the signing view with its feedback.
+ */
+export async function completePublicPdfSigningAction(
+  _previous: Readonly<{ error: string }> | null,
+  formData: FormData
+): Promise<Readonly<{ error: string }>> {
+  const token = getFormString(formData, "token")
+  let completed = false
+
+  try {
+    const ip = getClientIp(await headers())
+    await checkRateLimit("public_signing", ip)
+    let values: unknown
+
+    try {
+      values = JSON.parse(getFormString(formData, "values") || "{}") as unknown
+    } catch {
+      return { error: "Your answers could not be read. Reload the page and try again." }
+    }
+
+    const view = await completePublicPdfSigning({
+      consented: formData.get("consent") === "on",
+      initialsDataUrl: getFormString(formData, "initialsDataUrl") || null,
+      ip: ip === "unknown" ? null : ip,
+      signatureDataUrl: getFormString(formData, "signatureDataUrl") || null,
+      token,
+      values,
+    })
+    completed = view.workflowStatus === "completed"
+
+    if (completed) {
+      // The signer does not wait for the signed copy to be stamped and sent.
+      after(() => finalizeSignedUpload({ token }))
+    }
+  } catch (error: unknown) {
+    const errorMessage = getPublicSigningActionErrorMessage(error, "Unable to complete signing.")
+    console.warn("public_pdf_signing_action_failed", { reason: errorMessage })
+    return { error: errorMessage }
+  }
+
+  redirect(
+    buildRedirect(getSigningPath(token), {
+      message: completed
+        ? "Your signature was recorded. All parties have signed."
+        : "Your signature was recorded. The document is waiting for the other parties.",
     })
   )
 }

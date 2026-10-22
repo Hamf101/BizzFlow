@@ -1,4 +1,4 @@
-import { Archive, FileText, RotateCcw, Trash2 } from "lucide-react"
+import { Archive, FileText, PenLine, RotateCcw, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import type { ReactElement, ReactNode } from "react"
@@ -14,6 +14,7 @@ import { ShareButton } from "@/components/sharing/share-button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { SetupIncomplete } from "@/components/ui/page-state"
 import { Badge } from "@/components/ui/badge"
+import { buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -21,7 +22,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { buildFeedbackRedirect } from "@/lib/action-result"
-import { canShareResource } from "@/lib/permissions"
+import { canPerformOrganizationAction, canShareResource } from "@/lib/permissions"
 import { LocalDate } from "@/components/ui/local-date"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
@@ -568,6 +569,16 @@ function DocumentActionsCard({
             documentId={document.id}
             organizationId={context.organization.id}
           />
+        ) : null}
+        {canContribute &&
+        document.lifecycleState === "active" &&
+        current?.contentType === "application/pdf" &&
+        canPerformOrganizationAction(context.membership, "documents:send") ? (
+          // The PDF as it is, with fields laid on it for each signer.
+          <Link className={buttonVariants({ variant: "outline" })} href={`/documents/${document.id}/fields`}>
+            <PenLine aria-hidden="true" />
+            Send for signature
+          </Link>
         ) : null}
         {canShareResource(context.membership, document) ? (
           <ShareButton name={document.title} resource={{ id: document.id, kind: "document" }} />

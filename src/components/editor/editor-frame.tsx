@@ -489,7 +489,7 @@ export function EditorSidePanel({
   )
 }
 
-function SaveStatus({
+export function SaveStatus({
   onRetry,
   status,
 }: {
