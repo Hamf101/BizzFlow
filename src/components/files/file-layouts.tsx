@@ -193,13 +193,6 @@ export function FileIconsLayout({
           slot="file-tile"
           style={riseDelay(index)}
         >
-          {/* First in the markup so Tab meets it where the eye does, at the
-              item's top corner, before the name under the picture. */}
-          {entry.menu ? (
-            <div className="absolute top-1 right-1 z-10 opacity-0 transition-opacity group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 has-[[data-popup-open]]:opacity-100 [@media(hover:none)]:opacity-100">
-              {entry.menu}
-            </div>
-          ) : null}
           {/* One height for every picture, so names line up along a row. */}
           <span className="grid h-[104px] w-full content-end justify-items-center sm:h-[132px]">
             <FileArt entry={entry} size="icon" />
@@ -214,6 +207,13 @@ export function FileIconsLayout({
               {entry.name}
             </Link>
           </span>
+          {/* After the name in the markup, so Tab meets the name first; it sits in the
+              item's top corner, above the link that covers the item. */}
+          {entry.menu ? (
+            <div className="absolute top-1 right-1 z-10 opacity-0 transition-opacity group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 has-[[data-popup-open]]:opacity-100 [@media(hover:none)]:opacity-100">
+              {entry.menu}
+            </div>
+          ) : null}
           <span
             className="-mt-1.5 max-w-full truncate text-[10.5px] text-muted-foreground tabular-nums sm:text-xs"
             data-slot={entry.note ? "file-retention" : "file-meta"}
