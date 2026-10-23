@@ -30,7 +30,7 @@ import { type FormEvent, type ReactElement, type ReactNode, useEffect, useState,
 
 import { findInsertChoices, INSERT_CHOICES, type InsertChoice } from "@/components/editor/block-catalog"
 import { canStartSection, convertTextBlock, isLine, isList, liftListItem, sectionOfTitle, type TextBlockKind } from "@/components/editor/editor-content"
-import { FontPicker } from "@/components/editor/font-picker"
+import { FontPicker } from "@/components/editor/lazy-panels"
 import type { EditorController } from "@/components/editor/use-editor-controller"
 import { Button } from "@/components/ui/button"
 import {

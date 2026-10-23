@@ -212,11 +212,20 @@ test("a signer turns an uploaded PDF down with a reason, and it is the sender's 
   const { documentId, links } = await linksFor(admin, tenant.organizationId, title, [email])
 
   const signer = await (await browser.newContext()).newPage()
+  // They decline before the PDF has arrived, so it arrives for a link that no longer works.
+  let release = (): void => undefined
+  const held = new Promise<void>((resolve) => (release = resolve))
+  await signer.route("**/api/sign/*/pdf", async (route) => {
+    await held
+    await route.continue()
+  })
   await signer.goto(`/sign/${links[email]}`)
-  await signer.locator("canvas").first().waitFor()
   await signer.getByText("Decline to sign").click()
   await signer.getByLabel(/Why are you not signing/).fill("The rent is wrong.")
   await signer.getByRole("button", { exact: true, name: "Decline" }).click()
+  await expect(signer.getByText("You declined to sign")).toBeVisible()
+  release()
+  await expect(signer.getByText("This PDF couldn't be shown.")).toBeVisible()
   await expect(signer.getByText("You declined to sign")).toBeVisible()
 
   const { data: answer } = await admin.from("document_answers").select("workflow_status").eq("document_id", documentId).single()

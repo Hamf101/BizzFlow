@@ -50,7 +50,9 @@ export function PdfPages({
           This PDF couldn&apos;t be shown. Reload the page to try again.
         </p>
       ) : (
-        <Document file={file} loading={null} onLoadError={() => setFailed(true)}>
+        // Not suspense, react-pdf's default: a PDF that can't load (a link declined meanwhile, a dropped
+        // connection) says so here rather than taking the whole page down with it.
+        <Document file={file} loading={null} onLoadError={() => setFailed(true)} suspense={false}>
           {/* ponytail: every page draws at once; draw pages near the screen only if long PDFs drag. */}
           <ol className="mx-auto flex flex-col items-center gap-4" style={{ maxWidth: MAX_WIDTH }}>
             {pages.map((page, index) => {
@@ -66,7 +68,7 @@ export function PdfPages({
                   style={{ aspectRatio: `${shown.width} / ${shown.height}` }}
                 >
                   {width > 0 ? (
-                    <Page loading={null} pageNumber={index + 1} renderAnnotationLayer={false} renderTextLayer={false} width={width} />
+                    <Page loading={null} pageNumber={index + 1} renderAnnotationLayer={false} renderTextLayer={false} suspense={false} width={width} />
                   ) : null}
                   <div className="absolute inset-0">{overlay(index + 1)}</div>
                 </li>
