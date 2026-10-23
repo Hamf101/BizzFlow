@@ -111,6 +111,8 @@ revoke all on table public.document_pdf_layouts from anon, authenticated, servic
 revoke all on table public.document_signing_attachments from anon, authenticated, service_role;
 grant select, insert, update on table public.document_pdf_layouts to service_role;
 grant select, insert, update (status) on table public.document_signing_attachments to service_role;
+-- The nightly sweep removes attachments nobody finished uploading.
+grant delete on table public.document_signing_attachments to service_role;
 
 -- Answers belong to a generated document, or hold an uploaded PDF's field values.
 create or replace function public.enforce_generated_document_answer()

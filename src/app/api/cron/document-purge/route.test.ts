@@ -3,10 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const processDueResourcePurges = vi.hoisted(() => vi.fn())
 const purgeDueTrashedTemplates = vi.hoisted(() => vi.fn())
 const cleanupAbandonedDocumentUploads = vi.hoisted(() => vi.fn())
+const cleanupAbandonedSigningAttachments = vi.hoisted(() => vi.fn())
 
 vi.mock("@/services/document-service", () => ({
   cleanupAbandonedDocumentUploads,
   processDueResourcePurges,
+}))
+vi.mock("@/services/pdf-signing-service", () => ({
+  cleanupAbandonedSigningAttachments,
 }))
 vi.mock("@/services/template-service", () => ({
   purgeDueTrashedTemplates,
@@ -22,6 +26,7 @@ describe("document purge cron route", () => {
     processDueResourcePurges.mockReset()
     purgeDueTrashedTemplates.mockReset().mockResolvedValue(1)
     cleanupAbandonedDocumentUploads.mockReset().mockResolvedValue({ failed: 0, removed: 4 })
+    cleanupAbandonedSigningAttachments.mockReset().mockResolvedValue({ failed: 0, removed: 1 })
     process.env.CRON_SECRET = CRON_SECRET
   })
 
@@ -82,6 +87,7 @@ describe("document purge cron route", () => {
       finalized: 2,
       templatesPurged: 1,
       abandonedUploads: { failed: 0, removed: 4 },
+      abandonedSigningAttachments: { failed: 0, removed: 1 },
     })
     expect(processDueResourcePurges).toHaveBeenCalledOnce()
   })

@@ -1,6 +1,7 @@
 import { createNoStoreResponse, monitoredCronResponse, refuseCronRequest } from "@/app/api/cron/_cron"
 import { captureUnexpectedError, describeErrorForLog } from "@/lib/observability"
 import { cleanupAbandonedDocumentUploads, processDueResourcePurges } from "@/services/document-service"
+import { cleanupAbandonedSigningAttachments } from "@/services/pdf-signing-service"
 import { purgeDueTrashedTemplates } from "@/services/template-service"
 
 /** Leaves the batch room to finish rather than be killed mid-delete. */
@@ -27,17 +28,21 @@ export async function GET(request: Request): Promise<Response> {
 
   return monitoredCronResponse("document-purge", "45 3 * * *", async (): Promise<Response> => {
     // Each runs whatever the others do, so one failing never stalls the rest.
-    const [documents, templates, uploads] = await Promise.allSettled([
+    const [documents, templates, uploads, attachments] = await Promise.allSettled([
       processDueResourcePurges(),
       purgeDueTrashedTemplates(),
       cleanupAbandonedDocumentUploads(),
+      cleanupAbandonedSigningAttachments(),
     ])
 
-    if (documents.status === "fulfilled" && templates.status === "fulfilled" && uploads.status === "fulfilled") {
-      return createNoStoreResponse({ ...documents.value, templatesPurged: templates.value, abandonedUploads: uploads.value }, 200)
+    if (documents.status === "fulfilled" && templates.status === "fulfilled" && uploads.status === "fulfilled" && attachments.status === "fulfilled") {
+      return createNoStoreResponse(
+        { ...documents.value, templatesPurged: templates.value, abandonedUploads: uploads.value, abandonedSigningAttachments: attachments.value },
+        200
+      )
     }
 
-    for (const failed of [documents, templates, uploads]) {
+    for (const failed of [documents, templates, uploads, attachments]) {
       if (failed.status === "rejected") {
         console.error("document_purge_cron_failed", {
           durationMs: Date.now() - startedAt,

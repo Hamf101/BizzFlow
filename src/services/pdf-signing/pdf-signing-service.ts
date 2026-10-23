@@ -880,6 +880,7 @@ async function startLayout(client: SigningServiceClient, input: MemberDocumentIn
     updated_by: input.actorUserId,
     version_id: file.id,
   }
+  // tenant-scope: the row inserted carries org_id: input.organizationId
   const { error: insertError } = await client.from("document_pdf_layouts").insert(row)
 
   // Opened twice at once: the other one's is kept.

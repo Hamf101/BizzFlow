@@ -9,7 +9,7 @@ import nextTs from "eslint-config-next/typescript";
 const TENANT_TABLES = new Set([
   "audit_logs", "document_access_grants", "document_activity_events", "document_answers",
   "document_comments", "document_guest_grants", "document_recent_accesses",
-  "document_signing_recipients", "document_template_versions", "document_templates",
+  "document_pdf_layouts", "document_signing_attachments", "document_signing_recipients", "document_template_versions", "document_templates",
   "document_versions", "documents", "folder_access_grants", "folders",
   "generated_document_finalizations", "invites", "notification_deliveries",
   "organization_memberships", "organization_roles", "public_form_links", "resource_purge_jobs",
