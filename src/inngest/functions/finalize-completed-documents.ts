@@ -4,6 +4,7 @@ import { inngest } from "@/inngest/client"
 import { monitorCron } from "@/lib/observability"
 import { runBackgroundStep, type BackgroundStepRunner } from "@/inngest/functions/shared"
 import { finalizeCompletedGeneratedDocuments } from "@/services/generated-document-finalization-service"
+import { finalizeCompletedUploads } from "@/services/pdf-signing-service"
 
 const FINALIZE_SWEEP_CRON = "17 * * * *"
 
@@ -23,6 +24,10 @@ export const finalizeCompletedDocumentsFunction = inngest.createFunction(
   },
   ({ step }: { step: BackgroundStepRunner }) =>
     runBackgroundStep(step, "finalize-completed-documents", () =>
-      monitorCron("finalize-completed-documents", FINALIZE_SWEEP_CRON, () => finalizeCompletedGeneratedDocuments())
+      monitorCron("finalize-completed-documents", FINALIZE_SWEEP_CRON, async () => ({
+        // Generated documents and signed uploads alike: each finished one gets its signed copy.
+        generated: await finalizeCompletedGeneratedDocuments(),
+        uploads: await finalizeCompletedUploads(),
+      }))
     )
 )

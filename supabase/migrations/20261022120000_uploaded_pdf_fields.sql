@@ -822,3 +822,48 @@ grant execute on function public.promote_generated_document_finalization(
   text,
   uuid
 ) to service_role;
+
+-- Signed uploads whose copy was never made, for the hourly sweep that also
+-- finishes generated documents: a finalizing that failed after the last
+-- signature gets another go.
+create function public.list_unfinalized_uploaded_pdfs(
+  target_limit integer
+)
+returns table (
+  org_id uuid,
+  document_id uuid,
+  created_by uuid
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select document.org_id, document.id, document.created_by
+  from public.documents document
+  join public.document_answers answer
+    on answer.document_id = document.id
+    and answer.org_id = document.org_id
+  join public.document_pdf_layouts layout
+    on layout.document_id = document.id
+    and layout.org_id = document.org_id
+  where document.source_kind = 'upload'
+    and document.lifecycle_state = 'active'
+    and document.archived_at is null
+    and document.created_by is not null
+    and answer.workflow_status = 'completed'
+    and not exists (
+      select 1
+      from public.generated_document_finalizations finalization
+      where finalization.document_id = document.id
+        and finalization.status = 'finalized'
+    )
+  -- ponytail: random order, as for generated documents, so one that keeps failing cannot hold the batch.
+  order by random()
+  limit least(greatest(coalesce(target_limit, 1), 1), 100);
+$$;
+
+revoke all on function public.list_unfinalized_uploaded_pdfs(integer)
+  from public, anon, authenticated;
+grant execute on function public.list_unfinalized_uploaded_pdfs(integer)
+  to service_role;

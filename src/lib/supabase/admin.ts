@@ -1087,6 +1087,10 @@ export type AdminDatabase = {
         }
         Returns: boolean
       }
+      list_unfinalized_uploaded_pdfs: {
+        Args: { target_limit: number }
+        Returns: { org_id: string; document_id: string; created_by: string | null }[]
+      }
       complete_pdf_recipient_signature: {
         Args: {
           target_org_id: string
@@ -1096,6 +1100,8 @@ export type AdminDatabase = {
           target_values: Record<string, unknown>
           target_signature_data: Record<string, unknown> | null
           target_initials_data: Record<string, unknown> | null
+          target_consented: boolean
+          target_ip: string | null
         }
         Returns: string
       }

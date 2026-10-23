@@ -174,6 +174,11 @@ begin
     raise exception 'The document does not hold both signers'' values.';
   end if;
 
+  -- The hourly sweep finds it until its signed copy is made.
+  if not exists (select 1 from public.list_unfinalized_uploaded_pdfs(100) listed where listed.document_id = uploaded_pdf_fields_test.document_id) then
+    raise exception 'A completed upload with no signed copy should be listed for the sweep.';
+  end if;
+
   -- A signed upload finalizes like a generated document.
   perform public.prepare_generated_document_finalization(organization_id, document_id, finalization_id,
     'organizations/' || organization_id || '/documents/' || document_id || '/finalizations/' || finalization_id || '/final.pdf',

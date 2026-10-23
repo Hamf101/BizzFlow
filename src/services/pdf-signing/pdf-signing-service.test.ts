@@ -19,6 +19,7 @@ import {
   completePublicPdfSigning,
   confirmPdfAttachmentUpload,
   createPdfAttachmentUpload,
+  finalizeCompletedUploads,
   finalizeSignedUpload,
   finalizeUploadedPdf,
   getPdfFieldEditor,
@@ -293,6 +294,17 @@ describe("fields on an uploaded PDF", () => {
     expect((await words(3)).join(" ")).toEqual(expect.stringContaining("Signing certificate"))
     expect((await words(3)).join(" ")).toEqual(expect.stringContaining("sam@example.com"))
     expect(finalize.persistence.promote).toHaveBeenCalledWith(expect.objectContaining({ originalFilename: "Lease-agreement-final.pdf" }))
+
+    // The hourly sweep finishes any signed upload whose copy was never made, as its sender.
+    const swept = vi.fn(async () => 2)
+    expect(
+      await finalizeCompletedUploads({
+        ...finalize,
+        listUnfinalized: async () => [{ createdBy: MANAGER_ID, documentId: DOCUMENT_ID, organizationId: ORG_ID }],
+        sendSignedCopies: swept,
+      })
+    ).toEqual({ finalizedCount: 1, scannedCount: 1 })
+    expect(swept).toHaveBeenCalledWith({ documentId: DOCUMENT_ID, organizationId: ORG_ID })
 
     // Right after the last signature, the signed copy is made as its sender and everyone is sent it.
     const sendSignedCopies = vi.fn(async () => 3)

@@ -2,6 +2,7 @@ export {
   completePublicPdfSigning,
   confirmPdfAttachmentUpload,
   createPdfAttachmentUpload,
+  finalizeCompletedUploads,
   finalizeSignedUpload,
   finalizeUploadedPdf,
   getPdfFieldEditor,

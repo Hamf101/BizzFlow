@@ -341,6 +341,64 @@ export type Database = {
           },
         ]
       }
+      document_pdf_layouts: {
+        Row: {
+          created_at: string
+          document_id: string
+          layout: Json
+          org_id: string
+          pages: Json
+          revision: number
+          updated_at: string
+          updated_by: string | null
+          version_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          layout: Json
+          org_id: string
+          pages: Json
+          revision?: number
+          updated_at?: string
+          updated_by?: string | null
+          version_id: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          layout?: Json
+          org_id?: string
+          pages?: Json
+          revision?: number
+          updated_at?: string
+          updated_by?: string | null
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_pdf_layouts_document_id_org_id_fkey"
+            columns: ["document_id", "org_id"]
+            isOneToOne: true
+            referencedRelation: "documents"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "document_pdf_layouts_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_pdf_layouts_version_id_document_id_fkey"
+            columns: ["version_id", "document_id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id", "document_id"]
+          },
+        ]
+      }
       document_recent_accesses: {
         Row: {
           document_id: string
@@ -429,6 +487,63 @@ export type Database = {
           },
         ]
       }
+      document_signing_attachments: {
+        Row: {
+          byte_size: number
+          content_type: string
+          created_at: string
+          document_id: string
+          field_id: string
+          id: string
+          org_id: string
+          original_filename: string
+          recipient_id: string
+          status: string
+          storage_key: string
+        }
+        Insert: {
+          byte_size: number
+          content_type: string
+          created_at?: string
+          document_id: string
+          field_id: string
+          id: string
+          org_id: string
+          original_filename: string
+          recipient_id: string
+          status?: string
+          storage_key: string
+        }
+        Update: {
+          byte_size?: number
+          content_type?: string
+          created_at?: string
+          document_id?: string
+          field_id?: string
+          id?: string
+          org_id?: string
+          original_filename?: string
+          recipient_id?: string
+          status?: string
+          storage_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_signing_attachments_document_id_org_id_fkey"
+            columns: ["document_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "document_signing_attachments_recipient_id_org_id_fkey"
+            columns: ["recipient_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "document_signing_recipients"
+            referencedColumns: ["id", "org_id"]
+          },
+        ]
+      }
       document_signing_recipients: {
         Row: {
           consented_at: string | null
@@ -447,6 +562,7 @@ export type Database = {
           signature_data: Json | null
           signed_at: string | null
           signed_ip: string | null
+          signer_id: string | null
           signer_number: number
           status: string
           token_expires_at: string
@@ -471,6 +587,7 @@ export type Database = {
           signature_data?: Json | null
           signed_at?: string | null
           signed_ip?: string | null
+          signer_id?: string | null
           signer_number: number
           status?: string
           token_expires_at: string
@@ -495,6 +612,7 @@ export type Database = {
           signature_data?: Json | null
           signed_at?: string | null
           signed_ip?: string | null
+          signer_id?: string | null
           signer_number?: number
           status?: string
           token_expires_at?: string
@@ -3404,6 +3522,20 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      complete_pdf_recipient_signature: {
+        Args: {
+          target_consented: boolean
+          target_document_id: string
+          target_initials_data: Json
+          target_ip: string
+          target_org_id: string
+          target_recipient_id: string
+          target_signature_data: Json
+          target_token_hash: string
+          target_values: Json
+        }
+        Returns: string
+      }
       complete_resource_purge_object: {
         Args: { target_lease_token: string; target_object_id: string }
         Returns: boolean
@@ -3722,6 +3854,14 @@ export type Database = {
         }[]
       }
       list_unfinalized_generated_documents: {
+        Args: { target_limit: number }
+        Returns: {
+          created_by: string
+          document_id: string
+          org_id: string
+        }[]
+      }
+      list_unfinalized_uploaded_pdfs: {
         Args: { target_limit: number }
         Returns: {
           created_by: string

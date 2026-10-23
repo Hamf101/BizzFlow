@@ -562,15 +562,52 @@ export async function finalizeSignedUpload(
   const client = resolveSigningClient(deps.client as SigningServiceClient | undefined)
   const recipient = await loadRecipientByToken(client, hashToken(normalizeToken(input.token)))
   const { data } = await client.from("documents").select("created_by").eq("id", recipient.document_id).eq("org_id", recipient.org_id).maybeSingle()
-  const createdBy = (data as { created_by: string | null } | null)?.created_by
-  const document = { documentId: recipient.document_id, organizationId: recipient.org_id }
 
+  return finalizeCompletedUpload(
+    { createdBy: (data as { created_by: string | null } | null)?.created_by ?? null, documentId: recipient.document_id, organizationId: recipient.org_id },
+    deps
+  )
+}
+
+/** A signed upload whose copy is still to be made, and who made it. */
+type CompletedUpload = Readonly<{ createdBy: string | null; documentId: string; organizationId: string }>
+
+/**
+ * Finishes signed uploads whose copy was never made, as the hourly sweep does
+ * for generated documents: a finalizing that failed after the last signature
+ * gets another go.
+ *
+ * @param deps - Injected listing, database, storage and email for tests.
+ * @returns How many were looked at, and how many now have their copy.
+ */
+export async function finalizeCompletedUploads(
+  deps: GeneratedDocumentFinalizationServiceDeps &
+    Pick<PdfSigningDeps, "readObject"> & { listUnfinalized?: (limit: number) => Promise<readonly CompletedUpload[]> } = {}
+): Promise<{ finalizedCount: number; scannedCount: number }> {
+  const uploads = await (deps.listUnfinalized ?? ((limit: number) => listUnfinalizedUploads(resolveSigningClient(deps.client as SigningServiceClient | undefined), limit)))(10)
+  let finalizedCount = 0
+
+  // One at a time: each stamps a whole PDF.
+  for (const upload of uploads) {
+    if (await finalizeCompletedUpload(upload, deps)) {
+      finalizedCount += 1
+    }
+  }
+
+  return { finalizedCount, scannedCount: uploads.length }
+}
+
+async function finalizeCompletedUpload(
+  upload: CompletedUpload,
+  deps: GeneratedDocumentFinalizationServiceDeps & Pick<PdfSigningDeps, "readObject">
+): Promise<boolean> {
   // ponytail: a document whose sender is gone gets its copy on the first download instead.
-  if (!createdBy) {
+  if (!upload.createdBy) {
     return false
   }
 
-  const finalized = await finalizeUploadedPdf({ actorUserId: createdBy, ...document }, deps).then(
+  const document = { documentId: upload.documentId, organizationId: upload.organizationId }
+  const finalized = await finalizeUploadedPdf({ actorUserId: upload.createdBy, ...document }, deps).then(
     () => true,
     () => false
   )
@@ -581,6 +618,20 @@ export async function finalizeSignedUpload(
   }
 
   return finalized
+}
+
+async function listUnfinalizedUploads(client: SigningServiceClient, limit: number): Promise<CompletedUpload[]> {
+  const { data, error } = await client.rpc("list_unfinalized_uploaded_pdfs", { target_limit: limit })
+
+  if (error || !Array.isArray(data)) {
+    throw createDatabaseError(error, "Unable to list signed uploads to finish.")
+  }
+
+  return (data as Array<{ created_by: string | null; document_id: string; org_id: string }>).map((row) => ({
+    createdBy: row.created_by,
+    documentId: row.document_id,
+    organizationId: row.org_id,
+  }))
 }
 
 /**
