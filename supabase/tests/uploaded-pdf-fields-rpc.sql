@@ -59,7 +59,7 @@ begin
   insert into public.documents (id, org_id, title, source_kind, created_by)
   values (document_id, organization_id, 'Lease agreement', 'upload', owner_id);
   insert into public.document_versions (id, org_id, document_id, version_number, status, storage_key, original_filename, content_type, byte_size, uploaded_by)
-  values (version_id, organization_id, document_id, 1, 'available', 'organizations/' || organization_id || '/documents/' || document_id || '/versions/' || version_id || '/lease.pdf', 'lease.pdf', 'application/pdf', 1024, owner_id);
+  values (version_id, organization_id, document_id, 1, 'available', 'organizations/' || organization_id || '/documents/' || document_id || '/versions/' || version_id || '/original.pdf', 'lease.pdf', 'application/pdf', 1024, owner_id);
   insert into public.document_answers (document_id, org_id, values, workflow_status)
   values (document_id, organization_id, '{}', 'draft');
   insert into public.document_pdf_layouts (document_id, org_id, version_id, pages, layout, updated_by)
@@ -183,6 +183,18 @@ begin
   perform public.prepare_generated_document_finalization(organization_id, document_id, finalization_id,
     'organizations/' || organization_id || '/documents/' || document_id || '/finalizations/' || finalization_id || '/final.pdf',
     repeat('c', 64), owner_id);
+
+  -- Purging the document deletes what its signers attached, not only its versions.
+  update public.documents set lifecycle_state = 'trashed', archived_at = now(), trashed_at = now(), pre_trash_lifecycle_state = 'active', trash_operation_id = gen_random_uuid() where id = document_id;
+  perform private.queue_document_purge(gen_random_uuid(), organization_id, document_id, 'manual', owner_id);
+
+  if not exists (
+    select 1 from public.resource_purge_objects purge_object
+    join public.document_signing_attachments attachment on attachment.storage_key = purge_object.storage_key
+    where attachment.id = attachment_id
+  ) then
+    raise exception 'Purging a signed upload left its attachment''s file behind.';
+  end if;
 
   -- The runner rolls the whole test back, so nothing is left behind.
 end;

@@ -867,3 +867,92 @@ revoke all on function public.list_unfinalized_uploaded_pdfs(integer)
   from public, anon, authenticated;
 grant execute on function public.list_unfinalized_uploaded_pdfs(integer)
   to service_role;
+
+-- Purging a document deletes what its signers attached as well as its versions
+-- and signed copies; the attachment rows go with the document, so their files
+-- are queued here first.
+create or replace function private.populate_resource_purge_objects(
+  target_job_id uuid,
+  target_org_id uuid
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  inserted_count integer;
+  populated_at timestamptz := clock_timestamp();
+begin
+  perform private.validate_resource_purge_storage_keys(
+    target_job_id,
+    target_org_id
+  );
+
+  insert into public.resource_purge_objects as existing_object (
+    job_id,
+    org_id,
+    object_kind,
+    storage_key,
+    available_at
+  )
+  select
+    target_job_id,
+    target_org_id,
+    'document_storage',
+    manifest.storage_key,
+    max(manifest.available_at)
+  from (
+    select
+      version.storage_key,
+      coalesce(
+        version.upload_authorization_expires_at,
+        populated_at
+      ) as available_at
+    from public.resource_purge_members member
+    join public.document_versions version
+      on version.document_id = member.resource_id
+     and version.org_id = member.org_id
+    where member.job_id = target_job_id
+      and member.org_id = target_org_id
+      and member.resource_kind = 'document'
+
+    union all
+
+    select
+      finalization.storage_key,
+      populated_at as available_at
+    from public.resource_purge_members member
+    join public.generated_document_finalizations finalization
+      on finalization.document_id = member.resource_id
+     and finalization.org_id = member.org_id
+    where member.job_id = target_job_id
+      and member.org_id = target_org_id
+      and member.resource_kind = 'document'
+
+    union all
+
+    select
+      attachment.storage_key,
+      populated_at as available_at
+    from public.resource_purge_members member
+    join public.document_signing_attachments attachment
+      on attachment.document_id = member.resource_id
+     and attachment.org_id = member.org_id
+    where member.job_id = target_job_id
+      and member.org_id = target_org_id
+      and member.resource_kind = 'document'
+  ) manifest
+  group by manifest.storage_key
+  on conflict (job_id, storage_key) do update
+  set available_at = greatest(
+    existing_object.available_at,
+    excluded.available_at
+  );
+
+  get diagnostics inserted_count = row_count;
+  return inserted_count;
+end;
+$$;
+revoke all on function private.populate_resource_purge_objects(uuid, uuid)
+  from public, anon, authenticated, service_role;

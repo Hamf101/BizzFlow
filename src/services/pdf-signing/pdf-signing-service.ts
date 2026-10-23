@@ -114,6 +114,8 @@ const MAX_PDF_BYTES = 50 * 1024 * 1024
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const ATTACHMENT_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"])
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+// One link cannot keep filling storage, whatever it replaces.
+const MAX_ATTACHMENTS_PER_SIGNER = 10
 
 /**
  * Opens an uploaded PDF for placing fields. The first time, its pages are read
@@ -662,6 +664,21 @@ export async function createPdfAttachmentUpload(
       throw new DocumentSigningServiceError("Attach a PDF or a picture of up to 10 MB.", 400)
     }
 
+    const { data: attached, error: countError } = await client
+      .from("document_signing_attachments")
+      .select("id")
+      .eq("recipient_id", recipient.id)
+      .eq("org_id", recipient.org_id)
+
+    if (countError) {
+      throw createDatabaseError(countError, "Unable to start this attachment.")
+    }
+
+    // ponytail: count-then-insert lets a burst of parallel starts pass the cap by a few; a constraint if that matters.
+    if ((attached ?? []).length >= MAX_ATTACHMENTS_PER_SIGNER) {
+      throw new DocumentSigningServiceError(`You can attach up to ${MAX_ATTACHMENTS_PER_SIGNER} files.`, 409)
+    }
+
     const attachmentId = (deps.createId ?? randomUUID)()
     const storageKey = `organizations/${recipient.org_id}/documents/${recipient.document_id}/attachments/${attachmentId}`
     const { error } = await client.from("document_signing_attachments").insert({
@@ -899,6 +916,8 @@ async function loadLayout(client: SigningServiceClient, input: Readonly<{ docume
 
 // The first time: the current version must be a readable PDF; its pages are kept.
 async function startLayout(client: SigningServiceClient, input: MemberDocumentInput, versionId: string | null, deps: PdfSigningDeps): Promise<LayoutRow> {
+  // Opening is a read, but the first open writes the fields down: only someone who may send them starts them.
+  await requireMemberDocumentAccess(client, input.organizationId, input.documentId, input.actorUserId, "contributor", "mutation", "documents:send", "You cannot prepare documents for signing.")
   const { data: version, error } = await client
     .from("document_versions")
     .select("id,storage_key,content_type,status,byte_size")

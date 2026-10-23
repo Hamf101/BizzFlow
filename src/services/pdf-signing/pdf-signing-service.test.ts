@@ -134,7 +134,7 @@ describe("fields on an uploaded PDF", () => {
     expect(deps.readObject).toHaveBeenCalledTimes(1)
   })
 
-  it("keeps no field off the PDF's pages, nothing over someone else's newer fields, and nothing from a viewer", async () => {
+  it("keeps no field off the PDF's pages, nothing over someone else's newer fields, and nothing from a viewer, who cannot even start them", async () => {
     const { deps } = harness()
     const { revision } = await getPdfFieldEditor(member, deps)
     const offPage = { ...LAYOUT, fields: [field(NAME, TENANT, "text", 3)] }
@@ -143,7 +143,9 @@ describe("fields on an uploaded PDF", () => {
     await expect(savePdfFieldLayout({ ...member, expectedRevision: revision + 5, layout: LAYOUT }, deps)).rejects.toMatchObject({ statusCode: 409 })
 
     const viewer = harness("viewer")
-    await getPdfFieldEditor(member, viewer.deps)
+    await expect(getPdfFieldEditor(member, viewer.deps)).rejects.toMatchObject({ statusCode: 403 })
+    expect(viewer.client.tables.document_pdf_layouts ?? []).toEqual([])
+    expect(viewer.client.tables.document_answers ?? []).toEqual([])
     await expect(savePdfFieldLayout({ ...member, expectedRevision: 1, layout: LAYOUT }, viewer.deps)).rejects.toMatchObject({ statusCode: 403 })
   })
 
@@ -353,6 +355,12 @@ describe("fields on an uploaded PDF", () => {
     })
     expect(checked).toEqual([`organizations/${ORG_ID}/documents/${DOCUMENT_ID}/attachments/${started.attachmentId}`])
     expect(client.tables.document_signing_attachments![0]).toMatchObject({ status: "available" })
+
+    // One link cannot keep filling storage: ten files is all a signer gets.
+    const attached = client.tables.document_signing_attachments!
+    attached.push(...Array.from({ length: 9 }, (_, n) => ({ ...attached[0]!, id: id(200 + n), storage_key: `${attached[0]!.storage_key as string}-${n}` })))
+    await expect(createPdfAttachmentUpload({ ...file, token: landlord! }, storage)).rejects.toMatchObject({ statusCode: 409 })
+    expect(attached).toHaveLength(10)
   })
 })
 
