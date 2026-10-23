@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3"
+import { GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { EncryptedPDFError, PDFDocument } from "pdf-lib"
 import { z } from "zod"
@@ -15,6 +15,7 @@ import { getDrawingDataUrl, normalizeOptionalDrawing, normalizeRequiredDrawing }
 import { createDatabaseError, DocumentSigningServiceError, runSigningOperation } from "@/services/document-signing/errors"
 import { sendSignedCopies } from "@/services/document-signing/signed-copies"
 import {
+  loadOrganizationName,
   loadRecipientByToken,
   mapSigningRecipient,
   markSigningRecipientViewed,
@@ -37,6 +38,8 @@ import {
 import { type PdfField, type PdfFieldLayout, pdfFieldLayoutSchema } from "@/types/pdf-fields"
 import type { DocumentSigningRecipient } from "@/types/signing"
 import type { DocumentSigningRecipientRow, DocumentSigningRecipientStatus, GeneratedDocumentWorkflowStatus } from "@/types/template"
+import { SIGNED_URL_MAX_TTL_SECONDS } from "@/lib/r2/stored-file"
+import { signCreateOnlyPut } from "@/services/r2-objects"
 
 /** One page of an uploaded PDF as it shows: its box in points and its turn. */
 export type PdfPage = Readonly<{ height: number; rotation: 0 | 90 | 180 | 270; width: number }>
@@ -696,13 +699,17 @@ async function loadSigningRecipient(client: SigningServiceClient, token: string,
 
 async function signStoredUpload(file: Readonly<{ byteSize: number; contentType: string; storageKey: string }>): Promise<{ expiresAt: string; uploadUrl: string }> {
   const env = getR2Env()
-  const uploadUrl = await getSignedUrl(
-    createR2Client(env),
-    new PutObjectCommand({ Bucket: env.CLOUDFLARE_R2_BUCKET_NAME, ContentLength: file.byteSize, ContentType: file.contentType, IfNoneMatch: "*", Key: file.storageKey }),
-    { expiresIn: env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS, signableHeaders: new Set(["content-type"]) }
-  )
+  // Create-only, as every upload is: a file can never be put over another.
+  const expiresIn = Math.min(env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS, SIGNED_URL_MAX_TTL_SECONDS)
+  const uploadUrl = await signCreateOnlyPut(getSignedUrl, createR2Client(env), {
+    bucket: env.CLOUDFLARE_R2_BUCKET_NAME,
+    byteSize: file.byteSize,
+    contentType: file.contentType,
+    expiresIn,
+    key: file.storageKey,
+  })
 
-  return { expiresAt: new Date(Date.now() + env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS * 1_000).toISOString(), uploadUrl }
+  return { expiresAt: new Date(Date.now() + expiresIn * 1_000).toISOString(), uploadUrl }
 }
 
 async function verifyStoredUpload(file: Readonly<{ byteSize: number; contentType: string; storageKey: string }>): Promise<void> {
@@ -928,15 +935,6 @@ async function readStoredObject(storageKey: string): Promise<Uint8Array> {
   return result.Body.transformToByteArray()
 }
 
-async function loadOrganizationName(client: SigningServiceClient, organizationId: string): Promise<string> {
-  const { data, error } = await client.from("organizations").select("name").eq("id", organizationId).maybeSingle()
-
-  if (error || !data) {
-    throw createDatabaseError(error, "Unable to load the organization.")
-  }
-
-  return (data as { name: string }).name
-}
 
 function parseLayout(value: unknown): PdfFieldLayout {
   const parsed = pdfFieldLayoutSchema.safeParse(value)

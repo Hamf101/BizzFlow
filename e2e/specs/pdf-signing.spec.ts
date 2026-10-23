@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 
 import type { Page } from "@playwright/test"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { PDFDocument, StandardFonts } from "pdf-lib"
 
 import { expect, test, uniqueEmail, uniqueName } from "../support/fixtures"
@@ -50,6 +51,42 @@ async function sign(page: Page): Promise<void> {
   await page.waitForURL(/message=/)
 }
 
+async function uploadPdf(page: Page, title: string): Promise<void> {
+  await page.goto("/documents/new")
+  const upload = page.getByLabel("Upload", { exact: true })
+  await waitForHydration(upload)
+  await upload.setInputFiles({ buffer: await agreement(), mimeType: "application/pdf", name: "Lease.pdf" })
+  const dialog = page.getByRole("dialog", { name: "Upload document" })
+  await dialog.getByLabel("Title").fill(title)
+  await dialog.getByRole("button", { name: "Upload" }).click()
+  await expect(page.getByRole("heading", { name: title })).toBeVisible({ timeout: 30_000 })
+}
+
+// Links are stored only as hashes, so a test sets a link of its own for each signer.
+async function linksFor(admin: SupabaseClient, organizationId: string, title: string, emails: readonly string[]): Promise<{ documentId: string; links: Record<string, string> }> {
+  const { data: document } = await admin.from("documents").select("id").eq("org_id", organizationId).eq("title", title).single()
+  const documentId = document!.id as string
+  const links: Record<string, string> = {}
+  for (const email of emails) {
+    links[email] = `pdf-signing-e2e-${createHash("sha256").update(`${documentId}:${email}`).digest("hex").slice(0, 32)}`
+    const { error } = await admin
+      .from("document_signing_recipients")
+      .update({ token_hash: createHash("sha256").update(links[email]!, "utf8").digest("hex") })
+      .eq("document_id", documentId)
+      .eq("email", email)
+    if (error) throw error
+  }
+  return { documentId, links }
+}
+
+/** Sends the open PDF to one person, by email, as its only signer. */
+async function sendToOne(page: Page, title: string, email: string): Promise<void> {
+  await page.getByRole("button", { name: "Send for signature" }).click()
+  await page.getByRole("combobox", { name: "Who signs as Signer 1" }).fill(email)
+  await page.getByRole("button", { exact: true, name: "Send" }).click()
+  await expect(page.getByRole("heading", { name: title })).toBeVisible()
+}
+
 test("an uploaded PDF is sent as it is: fields for each signer, each signs only theirs, and the signed copy closes with its certificate", async ({
   admin,
   browser,
@@ -59,15 +96,7 @@ test("an uploaded PDF is sent as it is: fields for each signer, each signs only 
   const page = await pageAs("owner_admin")
   const title = uniqueName("Lease")
 
-  await page.goto("/documents/new")
-  const upload = page.getByLabel("Upload", { exact: true })
-  await waitForHydration(upload)
-  await upload.setInputFiles({ buffer: await agreement(), mimeType: "application/pdf", name: "Lease.pdf" })
-  const dialog = page.getByRole("dialog", { name: "Upload document" })
-  await dialog.getByLabel("Title").fill(title)
-  await dialog.getByRole("button", { name: "Upload" }).click()
-  await expect(page.getByRole("heading", { name: title })).toBeVisible({ timeout: 30_000 })
-
+  await uploadPdf(page, title)
   await page.getByRole("link", { name: "Send for signature" }).click()
   await page.locator("canvas").first().waitFor()
   await nameSigner(page, /Rename/, "Tenant")
@@ -116,19 +145,7 @@ test("an uploaded PDF is sent as it is: fields for each signer, each signs only 
   await page.getByRole("button", { exact: true, name: "Send" }).click()
   await expect(page.getByRole("heading", { name: title })).toBeVisible()
 
-  // Links are stored only as hashes, so the test sets a link of its own for each signer.
-  const { data: document } = await admin.from("documents").select("id").eq("org_id", tenant.organizationId).eq("title", title).single()
-  const documentId = document!.id as string
-  const links: Record<string, string> = {}
-  for (const email of [tenantEmail, landlordEmail]) {
-    links[email] = `pdf-signing-e2e-${createHash("sha256").update(`${documentId}:${email}`).digest("hex").slice(0, 32)}`
-    const { error } = await admin
-      .from("document_signing_recipients")
-      .update({ token_hash: createHash("sha256").update(links[email]!, "utf8").digest("hex") })
-      .eq("document_id", documentId)
-      .eq("email", email)
-    if (error) throw error
-  }
+  const { documentId, links } = await linksFor(admin, tenant.organizationId, title, [tenantEmail, landlordEmail])
 
   // The tenant sees their signature field live and the landlord's date greyed.
   const tenantPage = await (await browser.newContext()).newPage()
@@ -158,4 +175,50 @@ test("an uploaded PDF is sent as it is: fields for each signer, each signs only 
   await expect
     .poll(async () => (await admin.from("document_signed_copy_links").select("id", { count: "exact", head: true }).eq("document_id", documentId)).count, { timeout: 20_000 })
     .toBe(3)
+})
+
+test("a signer attaches a file to an attachment field, and it counts once it has arrived", async ({ admin, browser, pageAs, tenant }) => {
+  const page = await pageAs("owner_admin")
+  const title = uniqueName("Lease with proof")
+  const email = uniqueEmail("renter")
+  await uploadPdf(page, title)
+  await page.getByRole("link", { name: "Send for signature" }).click()
+  await page.locator("canvas").first().waitFor()
+  await placeOn(page, "Attachment", { x: 0.3, y: 0.5 })
+  await sendToOne(page, title, email)
+  const { documentId, links } = await linksFor(admin, tenant.organizationId, title, [email])
+
+  const signer = await (await browser.newContext()).newPage()
+  await signer.goto(`/sign/${links[email]}`)
+  await signer.locator("canvas").first().waitFor()
+  await signer.getByLabel("attachment").setInputFiles({ buffer: Buffer.from("%PDF-1.4\n%%EOF\n"), mimeType: "application/pdf", name: "Proof of income.pdf" })
+  await expect(signer.getByText("Proof of income.pdf")).toBeVisible({ timeout: 20_000 })
+  await sign(signer)
+  await expect(signer.getByText("Everyone has signed")).toBeVisible()
+
+  const { data: attachments } = await admin.from("document_signing_attachments").select("status,original_filename").eq("document_id", documentId)
+  expect(attachments).toEqual([{ original_filename: "Proof of income.pdf", status: "available" }])
+})
+
+test("a signer turns an uploaded PDF down with a reason, and it is the sender's draft again", async ({ admin, browser, pageAs, tenant }) => {
+  const page = await pageAs("owner_admin")
+  const title = uniqueName("Lease to decline")
+  const email = uniqueEmail("decliner")
+  await uploadPdf(page, title)
+  await page.getByRole("link", { name: "Send for signature" }).click()
+  await page.locator("canvas").first().waitFor()
+  await placeOn(page, "Signature", { x: 0.3, y: 0.72 })
+  await sendToOne(page, title, email)
+  const { documentId, links } = await linksFor(admin, tenant.organizationId, title, [email])
+
+  const signer = await (await browser.newContext()).newPage()
+  await signer.goto(`/sign/${links[email]}`)
+  await signer.locator("canvas").first().waitFor()
+  await signer.getByText("Decline to sign").click()
+  await signer.getByLabel(/Why are you not signing/).fill("The rent is wrong.")
+  await signer.getByRole("button", { exact: true, name: "Decline" }).click()
+  await expect(signer.getByText("You declined to sign")).toBeVisible()
+
+  const { data: answer } = await admin.from("document_answers").select("workflow_status").eq("document_id", documentId).single()
+  expect(answer!.workflow_status).toBe("draft")
 })

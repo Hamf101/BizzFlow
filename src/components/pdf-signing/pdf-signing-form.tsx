@@ -68,7 +68,8 @@ export function PdfSigningForm({ token, view }: { token: string; view: PublicPdf
       })
       if (!started.ok) throw new Error()
       const { attachmentId, uploadUrl } = (await started.json()) as { attachmentId: string; uploadUrl: string }
-      const put = await fetch(uploadUrl, { body: file, headers: { "Content-Type": file.type }, method: "PUT" })
+      // The upload address is create-only: it takes the file only with If-None-Match, as it was signed.
+      const put = await fetch(uploadUrl, { body: file, headers: { "content-type": file.type, "if-none-match": "*" }, method: "PUT" })
       if (!put.ok) throw new Error()
       const confirmed = await fetch(`${base}/${encodeURIComponent(attachmentId)}`, { headers: json, method: "POST" })
       if (!confirmed.ok) throw new Error()
@@ -83,7 +84,7 @@ export function PdfSigningForm({ token, view }: { token: string; view: PublicPdf
   }
 
   return (
-    <form action={submit} className="flex flex-col gap-6 pb-28">
+    <form action={submit} className="flex flex-col gap-6">
       <input name="token" type="hidden" value={token} />
       <input name="values" type="hidden" value={JSON.stringify(values)} />
 

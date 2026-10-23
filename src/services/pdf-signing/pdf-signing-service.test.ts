@@ -1,3 +1,4 @@
+import { declinePublicDocumentSigning } from "@/services/document-signing-service"
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs"
 import { degrees, PDFDocument } from "pdf-lib"
 import { describe, expect, it, vi } from "vitest"
@@ -97,6 +98,7 @@ function harness(access: "contributor" | "viewer" = "contributor") {
     ],
     organization_memberships: [{ org_id: ORG_ID, role: "manager", status: "active", user_id: MANAGER_ID }],
     organizations: [{ id: ORG_ID, name: "Northwind Property" }],
+    profiles: [{ email: "manager@example.com", id: MANAGER_ID }],
   })
   const ids = [TENANT, id(90), id(91)]
   let tokens = 0
@@ -172,6 +174,30 @@ describe("fields on an uploaded PDF", () => {
     await expect(
       sendPdfForSigning({ ...member, recipients: [{ email: "a@example.com", name: "A", signerId: TENANT }, { email: "b@example.com", name: "B", signerId: LANDLORD }] }, deps)
     ).rejects.toMatchObject({ statusCode: 409 })
+  })
+
+  it("lets a signer decline with a reason: the PDF is the sender's draft again and the sender hears why", async () => {
+    const { client, deps } = harness()
+    await savePdfFieldLayout({ ...member, expectedRevision: (await getPdfFieldEditor(member, deps)).revision, layout: LAYOUT }, deps)
+    await sendPdfForSigning(
+      {
+        ...member,
+        recipients: [
+          { email: "jordan@example.com", name: "Jordan Ellis", signerId: TENANT },
+          { email: "sam@example.com", name: "Sam Rivera", signerId: LANDLORD },
+        ],
+      },
+      deps
+    )
+    const [tenant] = vi.mocked(deps.sendDocumentSigningEmail).mock.calls.map(([invitation]) => invitation.token)
+    const sendDocumentSigningDeclinedEmail = vi.fn(async () => undefined)
+
+    expect(await declinePublicDocumentSigning({ reason: "The rent is wrong.", token: tenant! }, { ...deps, sendDocumentSigningDeclinedEmail })).toEqual({
+      documentTitle: "Lease agreement",
+      organizationName: "Northwind Property",
+    })
+    expect(client.tables.document_answers![0]).toMatchObject({ workflow_status: "draft" })
+    expect(sendDocumentSigningDeclinedEmail).toHaveBeenCalledWith(expect.objectContaining({ documentTitle: "Lease agreement", reason: "The rent is wrong." }))
   })
 
   it("lets a signer fill only their own fields, each in its own shape, and sign", async () => {

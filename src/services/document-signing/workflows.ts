@@ -50,6 +50,7 @@ import {
   cleanupRecipients,
   completeRecipientSignature,
   declineSigningWorkflow,
+  loadSigningDocumentSummary,
   insertSigningRecipients,
   loadGeneratedDocumentView,
   loadPublicSigningView,
@@ -1059,7 +1060,8 @@ export async function declinePublicDocumentSigning(
       throw new DocumentSigningServiceError("You have already signed this document.", 409)
     }
 
-    const view = await loadPublicSigningView(client, recipient)
+    // Only what the decline says: generated documents and uploads alike.
+    const document = await loadSigningDocumentSummary(client, recipient)
     const revoked = await declineSigningWorkflow(client, recipient, reason)
     const declinedAt = getSigningNow(deps.now).toISOString()
     const documentId = recipient.document_id
@@ -1077,20 +1079,20 @@ export async function declinePublicDocumentSigning(
       deps.recordAuditLog
     )
 
-    const senderEmail = await loadProfileEmail(client, recipient.sent_by ?? view.document.createdBy)
+    const senderEmail = await loadProfileEmail(client, recipient.sent_by ?? document.createdBy)
     const sendDeclined = deps.sendDocumentSigningDeclinedEmail ?? defaultSendDocumentSigningDeclinedEmail
     const sendCancelled = deps.sendDocumentSigningCancelledEmail ?? defaultSendDocumentSigningCancelledEmail
     const deliveries = await Promise.allSettled([
       ...(senderEmail
-        ? [sendDeclined({ declinedAt, declinerName: recipient.name, documentId, documentTitle: view.document.title, reason, recipientEmail: senderEmail })]
+        ? [sendDeclined({ declinedAt, declinerName: recipient.name, documentId, documentTitle: document.title, reason, recipientEmail: senderEmail })]
         : []),
       ...revoked
         .filter((other) => other.id !== recipient.id)
         .map((other) =>
           sendCancelled({
             documentId,
-            documentTitle: view.document.title,
-            organizationName: view.organizationName,
+            documentTitle: document.title,
+            organizationName: document.organizationName,
             recipientEmail: other.email,
             recipientId: other.id,
             recipientName: other.name,
@@ -1105,7 +1107,7 @@ export async function declinePublicDocumentSigning(
       console.warn("document_signing_declined_email_incomplete", { organizationId, documentId, failedDeliveries, senderFound: Boolean(senderEmail) })
     }
 
-    return { documentTitle: view.document.title, organizationName: view.organizationName }
+    return { documentTitle: document.title, organizationName: document.organizationName }
   })
 }
 

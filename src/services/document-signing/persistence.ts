@@ -681,3 +681,51 @@ function normalizeWorkflowStatus(
 
   return value
 }
+
+/**
+ * Names a workspace for what a signer reads: its name as members set it.
+ *
+ * @param client - Signing persistence client.
+ * @param organizationId - The workspace.
+ * @returns Its name.
+ * @throws DocumentSigningServiceError when it can't be read.
+ */
+export async function loadOrganizationName(client: SigningServiceClient, organizationId: string): Promise<string> {
+  const { data, error } = await client.from("organizations").select("name").eq("id", organizationId).maybeSingle()
+
+  if (error || !data) {
+    throw createDatabaseError(error, "Unable to load the organization.")
+  }
+
+  return (data as { name: string }).name
+}
+
+/**
+ * What any signing link's document is called, whose workspace it is, and who
+ * made it: all a signer's decline needs, for a generated document or an upload.
+ *
+ * @param client - Signing persistence client.
+ * @param recipient - The signer whose link it is.
+ * @returns The document's title and creator, and the workspace's name.
+ * @throws DocumentSigningServiceError 404 when the document is gone.
+ */
+export async function loadSigningDocumentSummary(
+  client: SigningServiceClient,
+  recipient: Pick<DocumentSigningRecipientRow, "document_id" | "org_id">
+): Promise<{ createdBy: string | null; organizationName: string; title: string }> {
+  const [{ data, error }, organizationName] = await Promise.all([
+    client.from("documents").select("title,created_by").eq("id", recipient.document_id).eq("org_id", recipient.org_id).maybeSingle(),
+    loadOrganizationName(client, recipient.org_id),
+  ])
+
+  if (error) {
+    throw createDatabaseError(error, "Unable to load this document.")
+  }
+
+  if (!data) {
+    throw new DocumentSigningServiceError("Signing link not found.", 404)
+  }
+
+  const document = data as { created_by: string | null; title: string }
+  return { createdBy: document.created_by, organizationName, title: document.title }
+}

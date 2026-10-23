@@ -218,6 +218,7 @@ async function PublicPdfSigning({
 
   return (
     <PublicSigningShell query={query}>
+      <>
       <section className="mx-auto flex w-full max-w-[820px] flex-col gap-1">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <LockKeyhole aria-hidden="true" className="size-4" />
@@ -236,6 +237,12 @@ async function PublicPdfSigning({
         )}
       </section>
       <PdfSigningForm token={token} view={view} />
+      {view.recipient.status !== "signed" && view.workflowStatus === "awaiting_signatures" ? (
+        <div className="mx-auto w-full max-w-[820px] pb-28">
+          <DeclineSigningForm token={token} />
+        </div>
+      ) : null}
+      </>
     </PublicSigningShell>
   )
 }
