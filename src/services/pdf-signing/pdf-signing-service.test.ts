@@ -179,7 +179,7 @@ describe("fields on an uploaded PDF", () => {
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
-  it("lets a signer decline with a reason: the PDF is the sender's draft again and the sender hears why", async () => {
+  it("lets a signer decline with a reason: the PDF is the sender's draft again, to send afresh, and the sender hears why", async () => {
     const { client, deps } = harness()
     await savePdfFieldLayout({ ...member, expectedRevision: (await getPdfFieldEditor(member, deps)).revision, layout: LAYOUT }, deps)
     await sendPdfForSigning(
@@ -201,6 +201,22 @@ describe("fields on an uploaded PDF", () => {
     })
     expect(client.tables.document_answers![0]).toMatchObject({ workflow_status: "draft" })
     expect(sendDocumentSigningDeclinedEmail).toHaveBeenCalledWith(expect.objectContaining({ documentTitle: "Lease agreement", reason: "The rent is wrong." }))
+
+    // The sender can send it again: the declined round's signers and answers are gone from it.
+    client.tables.document_answers![0]!.values = { [DATE]: "2026-01-01" }
+    expect((await getPdfFieldEditor(member, deps)).recipients).toEqual([])
+    await sendPdfForSigning(
+      {
+        ...member,
+        recipients: [
+          { email: "casey@example.com", name: "Casey Moore", signerId: TENANT },
+          { email: "sam@example.com", name: "Sam Rivera", signerId: LANDLORD },
+        ],
+      },
+      deps
+    )
+    expect(client.tables.document_answers![0]).toMatchObject({ values: {}, workflow_status: "awaiting_signatures" })
+    expect((await getPdfFieldEditor(member, deps)).recipients.map((recipient) => recipient.name)).toEqual(["Casey Moore", "Sam Rivera"])
   })
 
   it("lets a signer fill only their own fields, each in its own shape, and sign", async () => {

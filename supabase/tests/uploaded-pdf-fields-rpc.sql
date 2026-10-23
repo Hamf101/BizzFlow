@@ -65,6 +65,11 @@ begin
   insert into public.document_pdf_layouts (document_id, org_id, version_id, pages, layout, updated_by)
   values (document_id, organization_id, version_id, '[{"width":612,"height":792,"rotation":0}]', '{"signers":[],"fields":[]}', owner_id);
 
+  -- A round someone declined is over: its revoked signer neither freezes the
+  -- fields, nor holds their role, nor keeps the next round from completing.
+  insert into public.document_signing_recipients (org_id, document_id, name, email, requires_signature, token_hash, token_expires_at, signer_id, status, viewed_at, declined_at, decline_reason, revoked_at)
+  values (organization_id, document_id, 'Declined tenant', 'declined@example.invalid', true, repeat('d', 64), now() + interval '1 day', tenant_id, 'declined', now(), now(), 'Wrong rent', now());
+
   -- Until anyone is invited, the fields can change.
   update public.document_pdf_layouts set layout = uploaded_pdf_fields_test.layout, revision = revision + 1
   where document_pdf_layouts.document_id = uploaded_pdf_fields_test.document_id;
@@ -74,8 +79,9 @@ begin
   values
     (tenant_recipient, organization_id, document_id, 'Jordan Ellis', 'jordan@example.invalid', true, tenant_hash, now() + interval '1 day', tenant_id),
     (landlord_recipient, organization_id, document_id, 'Sam Rivera', 'sam@example.invalid', false, landlord_hash, now() + interval '1 day', landlord_id);
-  update public.document_answers set workflow_status = 'awaiting_signatures'
-  where document_answers.document_id = uploaded_pdf_fields_test.document_id;
+  -- As sending does: the round starts with no answers, then waits for signatures.
+  update public.document_answers set values = '{}', workflow_status = 'awaiting_signatures'
+  where document_answers.document_id = uploaded_pdf_fields_test.document_id and workflow_status = 'draft';
 
   begin
     update public.document_pdf_layouts set revision = revision + 1

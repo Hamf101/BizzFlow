@@ -135,7 +135,8 @@ export async function getPdfFieldEditor(input: MemberDocumentInput, deps: PdfSig
     const row = (await loadLayout(client, input)) ?? (await startLayout(client, input, document.currentVersionId, deps))
     const [{ data: answer, error: answerError }, { data: recipients, error: recipientError }] = await Promise.all([
       client.from("document_answers").select("workflow_status").eq("document_id", input.documentId).eq("org_id", input.organizationId).maybeSingle(),
-      client.from("document_signing_recipients").select("*").eq("document_id", input.documentId).eq("org_id", input.organizationId).order("invited_at", { ascending: true }),
+      // The round out for signing now; one declined or cancelled is over.
+      client.from("document_signing_recipients").select("*").eq("document_id", input.documentId).eq("org_id", input.organizationId).is("revoked_at", null).order("invited_at", { ascending: true }),
     ])
 
     if (answerError || recipientError) {
@@ -246,18 +247,21 @@ export async function sendPdfForSigning(
     }
 
     const people = normalizeRecipientInputs(layout.signers.map((signer) => ({ email: chosen.get(signer.id)!.email, name: chosen.get(signer.id)!.name })))
-    const { data: answer, error: answerError } = await client
+    // Each round starts empty, so nothing from one that was declined or cancelled is stamped.
+    const { data: draft, error: answerError } = await client
       .from("document_answers")
-      .select("workflow_status")
+      .update({ values: {} })
       .eq("document_id", input.documentId)
       .eq("org_id", input.organizationId)
+      .eq("workflow_status", "draft")
+      .select("document_id")
       .maybeSingle()
 
     if (answerError) {
       throw createDatabaseError(answerError, "Unable to load this document's signing.")
     }
 
-    if (workflowOf(answer) !== "draft") {
+    if (!draft) {
       throw new DocumentSigningServiceError("This PDF has already been sent.", 409)
     }
 
@@ -464,7 +468,7 @@ export async function finalizeUploadedPdf(
     const layout = parseStoredLayout(row.layout)
     const [answers, recipients, version, attachments] = await Promise.all([
       client.from("document_answers").select("values,workflow_status").eq("document_id", input.documentId).eq("org_id", input.organizationId).maybeSingle(),
-      client.from("document_signing_recipients").select("id,signer_id,name,email,status,requires_signature,signed_at,consented_at,signed_ip,signature_data,initials_data").eq("document_id", input.documentId).eq("org_id", input.organizationId),
+      client.from("document_signing_recipients").select("id,signer_id,name,email,status,requires_signature,signed_at,consented_at,signed_ip,signature_data,initials_data").eq("document_id", input.documentId).eq("org_id", input.organizationId).is("revoked_at", null),
       client.from("document_versions").select("storage_key").eq("id", row.version_id).eq("document_id", input.documentId).eq("org_id", input.organizationId).maybeSingle(),
       client.from("document_signing_attachments").select("id,original_filename").eq("document_id", input.documentId).eq("org_id", input.organizationId).eq("status", "available"),
     ])
@@ -838,7 +842,7 @@ async function loadPublicView(client: SigningServiceClient, recipient: DocumentS
     loadLayout(client, input),
     loadOrganizationName(client, recipient.org_id),
     client.from("document_answers").select("values,workflow_status").eq("document_id", input.documentId).eq("org_id", input.organizationId).maybeSingle(),
-    client.from("document_signing_recipients").select("id,name,signer_id,status").eq("document_id", input.documentId).eq("org_id", input.organizationId),
+    client.from("document_signing_recipients").select("id,name,signer_id,status").eq("document_id", input.documentId).eq("org_id", input.organizationId).is("revoked_at", null),
   ])
 
   if (!row || !recipient.signer_id) {

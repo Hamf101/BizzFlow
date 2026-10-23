@@ -28,7 +28,8 @@ create index document_pdf_layouts_version_idx on public.document_pdf_layouts (ve
 create index document_pdf_layouts_updated_by_idx on public.document_pdf_layouts (updated_by)
   where updated_by is not null;
 
--- Fields are what signers were sent: they stop changing once anyone is invited.
+-- Fields are what signers were sent: they stop changing once anyone is invited,
+-- and change again once that round was declined or cancelled.
 create function private.enforce_document_pdf_layout_update()
 returns trigger
 language plpgsql
@@ -40,6 +41,7 @@ begin
     from public.document_signing_recipients recipient
     where recipient.document_id = old.document_id
       and recipient.org_id = old.org_id
+      and recipient.revoked_at is null
   ) or exists (
     select 1
     from public.document_answers answer
@@ -62,13 +64,14 @@ create trigger document_pdf_layouts_enforce_update
   before update on public.document_pdf_layouts
   for each row execute function private.enforce_document_pdf_layout_update();
 
--- The role each invited signer fills on an uploaded PDF.
+-- The role each invited signer fills on an uploaded PDF: one live signer per
+-- role, so a role whose round was declined or cancelled can be sent again.
 alter table public.document_signing_recipients
   add column signer_id uuid;
 
 create unique index document_signing_recipients_signer_idx
   on public.document_signing_recipients (document_id, signer_id)
-  where signer_id is not null;
+  where signer_id is not null and revoked_at is null;
 
 -- What a signer attaches for an attachment field: a PDF or picture, kept
 -- privately beside the document.
@@ -299,6 +302,7 @@ begin
     and recipient.document_id = target_document_id
     and recipient.org_id = target_org_id
     and recipient.token_hash = target_token_hash
+    and recipient.revoked_at is null
   for update;
 
   if not found or recipient_signer is null then
@@ -398,6 +402,7 @@ begin
     from public.document_signing_recipients recipient
     where recipient.document_id = target_document_id
       and recipient.org_id = target_org_id
+      and recipient.revoked_at is null
       and recipient.status <> 'signed'
   ) then
     return answer_status;
