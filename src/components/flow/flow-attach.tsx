@@ -328,7 +328,7 @@ export function FlowAttachChip({ attachment }: { attachment: FlowAttachment }): 
           {error}
         </p>
       ) : (
-        <p className="px-0.5 text-[11px] text-muted-foreground">Flow reads this file.</p>
+        <p className="px-0.5 text-[11px] text-muted-foreground">Flow reads this file with each message you send, until you remove it.</p>
       )}
     </div>
   )
