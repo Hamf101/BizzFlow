@@ -110,6 +110,24 @@ export function fakeClient(tables: Tables, onAppend?: () => void, onRead?: (tabl
         }
         return query
       },
+      delete: () => {
+        const keeps: Array<(row: FakeRow) => boolean> = []
+        const query = {
+          eq: (column: string, value: unknown) => {
+            keeps.push((row) => row[column] === value)
+            return query
+          },
+          in: (column: string, values: unknown[]) => {
+            keeps.push((row) => values.includes(row[column]))
+            return query
+          },
+          then: (resolve: (result: { data: null; error: null }) => unknown) => {
+            tables[table] = tables[table].filter((row) => !keeps.every((matches) => matches(row))) as never
+            return Promise.resolve({ data: null, error: null }).then(resolve)
+          },
+        }
+        return query
+      },
       upsert: async (row: FakeRow, options: { ignoreDuplicates?: boolean; onConflict: string }) => {
         if (!tables[table].some((existing) => existing[options.onConflict] === row[options.onConflict])) {
           tables[table].push({ document_id: null, revision: 0, state_revision: 0, ...row })

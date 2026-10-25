@@ -68,6 +68,22 @@ describe("working copy notes", () => {
     await expect(restoreWorkingCopyCheckpoint({ ...room, checkpointId: "60000000-0000-4000-8000-000000009999" }, deps)).rejects.toMatchObject({ statusCode: 404 })
   })
 
+  it("keeps only the fifty newest checkpoints, so a member can't pile up storage", async () => {
+    const { deps, tables } = harness()
+    const { roomId } = await openWorkingCopyRoom(as(MANAGER_ID), deps)
+    const room = { ...as(MANAGER_ID), roomId }
+
+    for (let index = 1; index <= 52; index++) {
+      await saveWorkingCopyCheckpoint({ ...room, label: `Checkpoint ${index}` }, deps)
+    }
+
+    const kept = tables.working_copy_checkpoints.map((row) => row.label)
+    expect(kept).toHaveLength(50)
+    expect(kept).not.toContain("Checkpoint 1")
+    expect(kept).not.toContain("Checkpoint 2")
+    expect((await listWorkingCopyCheckpoints(room, deps)).at(-1)).toMatchObject({ label: "Checkpoint 3" })
+  })
+
   it("keeps threads of comments on blocks, with replies, resolved and opened again", async () => {
     const { deps } = harness()
     const { roomId } = await openWorkingCopyRoom(as(MANAGER_ID), deps)

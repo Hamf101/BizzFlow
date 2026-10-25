@@ -413,7 +413,26 @@ async function insertCheckpoint(
     throw new WorkingCopyServiceError("Unable to keep this checkpoint.", 500)
   }
 
+  await dropUnlistedCheckpoints(client, input)
   return data as CheckpointRow
+}
+
+// Only the newest MOST_CHECKPOINTS are ever listed or restorable, so older ones
+// are storage nobody can reach. Best effort: the checkpoint is already kept, and
+// a missed pass is caught up by the next save (up to 100 at a time).
+async function dropUnlistedCheckpoints(client: WorkingCopyServiceClient, input: RoomNoteInput): Promise<void> {
+  const { data } = await client
+    .from("working_copy_checkpoints")
+    .select("id")
+    .eq("room_id", input.roomId)
+    .eq("org_id", input.organizationId)
+    .order("created_at", { ascending: false })
+    .range(MOST_CHECKPOINTS, MOST_CHECKPOINTS + 99)
+
+  const ids = (data ?? []).map((row) => (row as { id: string }).id)
+  if (ids.length > 0) {
+    await client.from("working_copy_checkpoints").delete().eq("org_id", input.organizationId).in("id", ids)
+  }
 }
 
 async function requireThread(client: WorkingCopyServiceClient, input: RoomNoteInput, threadId: string): Promise<void> {
