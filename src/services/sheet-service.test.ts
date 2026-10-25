@@ -66,6 +66,13 @@ describe("sheet service", () => {
     await expect(getSheet({ ...as("user-1"), documentId: "document-1" }, deps)).rejects.toMatchObject({ statusCode: 404 })
   })
 
+  it("won't open a stored sheet that isn't valid, whoever wrote it", async () => {
+    const { as, client, deps } = setUp()
+    client.tables.documents[0]!.sheet_content = { version: 1, tabs: [{ id: "t1", name: "Sheet1", cells: { A1: { f: "1", evil: true } } }] }
+
+    await expect(getSheet(as("user-1"), deps)).rejects.toMatchObject({ statusCode: 500 })
+  })
+
   it("saves content for writers only, and only over the version they opened", async () => {
     const { as, client, deps } = setUp()
     const content = book({ A1: 2, A2: "=A1*3" })

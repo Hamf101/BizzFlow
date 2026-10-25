@@ -124,11 +124,19 @@ export async function getSheet(input: SheetInput, deps: SheetServiceDeps = {}): 
 
     const row = result.data!
 
-    // Every write went through parseSheetContent, so the stored sheet is trusted.
+    // Checked on the way out too, so no writer, present or future, can hand the
+    // formula engine cells it was never built to take.
+    let content: SheetContent
+    try {
+      content = parseSheetContent(row.sheet_content)
+    } catch {
+      throw new SheetServiceError("This sheet can't be opened.", 500)
+    }
+
     return {
       id: row.id,
       title: row.title,
-      content: row.sheet_content!,
+      content,
       updatedAt: row.updated_at,
       accessLevel,
       folderId: guest ? null : row.folder_id,
