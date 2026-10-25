@@ -20,7 +20,11 @@ minimumReleaseAgeIgnoreMissingTime: false
 # the list must stay present, even empty. Remove an entry once it ages. pnpm
 # 11.10 predates minimumReleaseAgeExcludePrune, so pruning stays a manual step
 # until the pinned package manager is deliberately updated.
-minimumReleaseAgeExclude: []
+minimumReleaseAgeExclude:
+  # GHSA fix for fast-uri <3.1.9 (via @sentry/nextjs's webpack plugin); reviewed
+  # 2026-10-25: no dependencies or install scripts, published from the fastify repo
+  # by GitHub Actions. Ages out 2026-10-26.
+  - fast-uri@3.1.9
 
 overrides:
   postcss: 8.5.23
@@ -39,8 +43,9 @@ overrides:
   '@grpc/grpc-js@1': '>=1.14.5'
   # Host confusion and SSRF advisories; reached through @sentry/webpack-plugin.
   # Bounded below 4 so the advisory floor cannot drag in a major upgrade. Raised
-  # to 3.1.8: 3.1.6 is in GHSA-qw65-cvwx-89v3 and GHSA-58mr-gqgx-xq4g.
-  fast-uri: '>=3.1.8 <4'
+  # to 3.1.8: 3.1.6 is in GHSA-qw65-cvwx-89v3 and GHSA-58mr-gqgx-xq4g; to 3.1.9
+  # for the 2026-10 host-delimiter and path-normalization advisories.
+  fast-uri: '>=3.1.9 <4'
   # Custom generators can loop indefinitely; reached through the pinned postcss.
   # Bounded below 4 for the same reason.
   nanoid: '>=3.3.18 <4'
