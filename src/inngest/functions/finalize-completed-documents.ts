@@ -29,9 +29,10 @@ type Sweep = () => Promise<unknown>
 
 /**
  * Generated documents and signed uploads alike: each finished one gets its
- * signed copy. Both sweeps run whatever the other does, so a document that
- * won't render never holds back the uploads; a failure still fails the run,
- * after both had their turn, so it is retried and reported.
+ * signed copy. The sweeps run one after the other (each renders PDFs, so not
+ * side by side in one invocation), and each runs whatever the other did: a
+ * document that won't render never holds back the uploads. Any failure still
+ * fails the run afterwards, every one of them reported, so it is retried.
  */
 export function handleFinalizeCompletedDocuments(
   { step }: { step: BackgroundStepRunner },
@@ -42,10 +43,14 @@ export function handleFinalizeCompletedDocuments(
 ) {
   return runBackgroundStep(step, "finalize-completed-documents", () =>
     monitorCron("finalize-completed-documents", FINALIZE_SWEEP_CRON, async () => {
-      const [generated, uploads] = await Promise.allSettled([sweeps.finalizeGenerated(), sweeps.finalizeUploads()])
-      if (generated.status === "rejected") throw generated.reason
-      if (uploads.status === "rejected") throw uploads.reason
-      return { generated: generated.value, uploads: uploads.value }
+      const failures: unknown[] = []
+      const run = (sweep: Sweep) => sweep().catch((error: unknown) => void failures.push(error))
+      const generated = await run(sweeps.finalizeGenerated)
+      const uploads = await run(sweeps.finalizeUploads)
+
+      if (failures.length === 1) throw failures[0]
+      if (failures.length > 1) throw new AggregateError(failures, "Both finalize sweeps failed.")
+      return { generated, uploads }
     })
   )
 }

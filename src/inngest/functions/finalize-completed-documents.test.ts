@@ -14,4 +14,13 @@ describe("handleFinalizeCompletedDocuments", () => {
     await expect(run).rejects.toThrow("render down")
     expect(finalizeUploads).toHaveBeenCalledOnce()
   })
+
+  it("reports both failures when both sweeps fail", async () => {
+    const run = handleFinalizeCompletedDocuments(
+      { step: createRecordingStep() },
+      { finalizeGenerated: async () => Promise.reject(new Error("render down")), finalizeUploads: async () => Promise.reject(new Error("storage down")) }
+    )
+
+    await expect(run).rejects.toMatchObject({ errors: [new Error("render down"), new Error("storage down")] })
+  })
 })

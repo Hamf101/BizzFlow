@@ -134,6 +134,7 @@ export async function listWorkingCopyCheckpoints(
       .eq("room_id", input.roomId)
       .eq("org_id", input.organizationId)
       .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(MOST_CHECKPOINTS)
 
     if (error || !data) {
@@ -413,23 +414,25 @@ async function insertCheckpoint(
     throw new WorkingCopyServiceError("Unable to keep this checkpoint.", 500)
   }
 
-  await dropUnlistedCheckpoints(client, input)
+  await dropUnlistedCheckpoints(client, input, checkpoint.restoredFrom)
   return data as CheckpointRow
 }
 
 // Only the newest MOST_CHECKPOINTS are ever listed or restorable, so older ones
 // are storage nobody can reach. Best effort: the checkpoint is already kept, and
 // a missed pass is caught up by the next save (up to 100 at a time).
-async function dropUnlistedCheckpoints(client: WorkingCopyServiceClient, input: RoomNoteInput): Promise<void> {
+// The checkpoint just gone back to is kept, so what it replaced still points at it.
+async function dropUnlistedCheckpoints(client: WorkingCopyServiceClient, input: RoomNoteInput, keep: string | null): Promise<void> {
   const { data } = await client
     .from("working_copy_checkpoints")
     .select("id")
     .eq("room_id", input.roomId)
     .eq("org_id", input.organizationId)
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .range(MOST_CHECKPOINTS, MOST_CHECKPOINTS + 99)
 
-  const ids = (data ?? []).map((row) => (row as { id: string }).id)
+  const ids = (data ?? []).map((row) => (row as { id: string }).id).filter((id) => id !== keep)
   if (ids.length > 0) {
     await client.from("working_copy_checkpoints").delete().eq("org_id", input.organizationId).in("id", ids)
   }

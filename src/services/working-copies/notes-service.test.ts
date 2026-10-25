@@ -81,7 +81,12 @@ describe("working copy notes", () => {
     expect(kept).toHaveLength(50)
     expect(kept).not.toContain("Checkpoint 1")
     expect(kept).not.toContain("Checkpoint 2")
-    expect((await listWorkingCopyCheckpoints(room, deps)).at(-1)).toMatchObject({ label: "Checkpoint 3" })
+    const oldest = (await listWorkingCopyCheckpoints(room, deps)).at(-1)!
+    expect(oldest).toMatchObject({ label: "Checkpoint 3" })
+
+    // Going back to the oldest keeps it, so what it replaced still points at it.
+    await restoreWorkingCopyCheckpoint({ ...room, checkpointId: oldest.id }, deps)
+    expect(tables.working_copy_checkpoints.find((row) => row.id === oldest.id)).toBeDefined()
   })
 
   it("keeps threads of comments on blocks, with replies, resolved and opened again", async () => {

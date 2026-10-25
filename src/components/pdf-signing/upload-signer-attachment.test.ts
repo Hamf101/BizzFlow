@@ -18,4 +18,8 @@ it("tells the signer why the server refused an attachment, and stays generic whe
     url.startsWith("/api/") ? Response.json({ attachmentId: "a-1", uploadUrl: "https://r2.example/put" }) : new Response(null, { status: 403 })
   )
   await expect(uploadSignerAttachment("token-1", "field-1", FILE)).rejects.toThrow("That file didn't upload. Try again.")
+
+  // A dropped connection never shows the browser's own wording.
+  vi.stubGlobal("fetch", async () => Promise.reject(new TypeError("Failed to fetch")))
+  await expect(uploadSignerAttachment("token-1", "field-1", FILE)).rejects.toThrow("That file didn't upload. Try again.")
 })
