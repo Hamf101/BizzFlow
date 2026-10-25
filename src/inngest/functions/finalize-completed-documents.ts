@@ -22,12 +22,30 @@ export const finalizeCompletedDocumentsFunction = inngest.createFunction(
     concurrency: 1,
     retries: 2,
   },
-  ({ step }: { step: BackgroundStepRunner }) =>
-    runBackgroundStep(step, "finalize-completed-documents", () =>
-      monitorCron("finalize-completed-documents", FINALIZE_SWEEP_CRON, async () => ({
-        // Generated documents and signed uploads alike: each finished one gets its signed copy.
-        generated: await finalizeCompletedGeneratedDocuments(),
-        uploads: await finalizeCompletedUploads(),
-      }))
-    )
+  ({ step }: { step: BackgroundStepRunner }) => handleFinalizeCompletedDocuments({ step })
 )
+
+type Sweep = () => Promise<unknown>
+
+/**
+ * Generated documents and signed uploads alike: each finished one gets its
+ * signed copy. Both sweeps run whatever the other does, so a document that
+ * won't render never holds back the uploads; a failure still fails the run,
+ * after both had their turn, so it is retried and reported.
+ */
+export function handleFinalizeCompletedDocuments(
+  { step }: { step: BackgroundStepRunner },
+  sweeps: { finalizeGenerated: Sweep; finalizeUploads: Sweep } = {
+    finalizeGenerated: () => finalizeCompletedGeneratedDocuments(),
+    finalizeUploads: () => finalizeCompletedUploads(),
+  }
+) {
+  return runBackgroundStep(step, "finalize-completed-documents", () =>
+    monitorCron("finalize-completed-documents", FINALIZE_SWEEP_CRON, async () => {
+      const [generated, uploads] = await Promise.allSettled([sweeps.finalizeGenerated(), sweeps.finalizeUploads()])
+      if (generated.status === "rejected") throw generated.reason
+      if (uploads.status === "rejected") throw uploads.reason
+      return { generated: generated.value, uploads: uploads.value }
+    })
+  )
+}
