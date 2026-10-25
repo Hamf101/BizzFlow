@@ -7,9 +7,11 @@ import { type ReactElement, useActionState, useState } from "react"
 import { completePublicPdfSigningAction } from "@/app/sign/[token]/actions"
 import { DrawnSignatureField } from "@/components/documents/drawn-signature-field"
 import { signerTone } from "@/components/pdf-signing/pdf-tones"
+import { uploadSignerAttachment } from "@/components/pdf-signing/upload-signer-attachment"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { SubmitButton } from "@/components/ui/submit-button"
+import { bizflowToast } from "@/components/ui/toaster"
 import { cn } from "@/lib/utils"
 import type { PublicPdfSigningView } from "@/services/pdf-signing-service"
 import type { PdfField } from "@/types/pdf-fields"
@@ -59,25 +61,12 @@ export function PdfSigningForm({ token, view }: { token: string; view: PublicPdf
     setUploading(field.id)
 
     try {
-      const base = `/api/sign/${encodeURIComponent(token)}/attachments`
-      const json = { "Content-Type": "application/json" }
-      const started = await fetch(base, {
-        body: JSON.stringify({ byteSize: file.size, contentType: file.type, fieldId: field.id, filename: file.name }),
-        headers: json,
-        method: "POST",
-      })
-      if (!started.ok) throw new Error()
-      const { attachmentId, uploadUrl } = (await started.json()) as { attachmentId: string; uploadUrl: string }
-      // The upload address is create-only: it takes the file only with If-None-Match, as it was signed.
-      const put = await fetch(uploadUrl, { body: file, headers: { "content-type": file.type, "if-none-match": "*" }, method: "PUT" })
-      if (!put.ok) throw new Error()
-      const confirmed = await fetch(`${base}/${encodeURIComponent(attachmentId)}`, { headers: json, method: "POST" })
-      if (!confirmed.ok) throw new Error()
-      set(field.id, attachmentId)
+      set(field.id, await uploadSignerAttachment(token, field.id, file))
       setNames((current) => ({ ...current, [field.id]: file.name }))
-    } catch {
+    } catch (error: unknown) {
       setNames((current) => ({ ...current, [field.id]: "" }))
       setAttachError(field.id)
+      bizflowToast.error((error as Error).message)
     } finally {
       setUploading(null)
     }
