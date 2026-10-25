@@ -3402,44 +3402,6 @@ export type Database = {
         Args: { target_actor_user_id: string; target_org_id: string }
         Returns: Database["public"]["Enums"]["organization_role"]
       }
-      assign_internal_submission: {
-        Args: {
-          target_actor_user_id: string
-          target_assignee_user_id: string
-          target_expected_revision: number
-          target_org_id: string
-          target_submission_id: string
-        }
-        Returns: {
-          assigned_at: string | null
-          assigned_by: string | null
-          assigned_to: string | null
-          created_at: string
-          created_by: string | null
-          id: string
-          org_id: string
-          public_draft_token: string | null
-          public_form_link_id: string | null
-          required_approvals: number | null
-          revision: number
-          status: string
-          submitted_at: string | null
-          submitted_by: string | null
-          template_id: string
-          template_revision: number
-          template_snapshot: Json
-          title: string
-          updated_at: string
-          updated_by: string | null
-          values: Json
-        }
-        SetofOptions: {
-          from: "*"
-          to: "submissions"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       cancel_document_signing: {
         Args: { target_document_id: string; target_org_id: string }
         Returns: {

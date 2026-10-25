@@ -1240,16 +1240,6 @@ export type AdminDatabase = {
         }
         Returns: AdminSubmissionRow
       }
-      assign_internal_submission: {
-        Args: {
-          target_org_id: string
-          target_submission_id: string
-          target_expected_revision: number
-          target_assignee_user_id: string
-          target_actor_user_id: string
-        }
-        Returns: AdminSubmissionRow
-      }
       set_submission_reviewers: {
         Args: {
           target_org_id: string

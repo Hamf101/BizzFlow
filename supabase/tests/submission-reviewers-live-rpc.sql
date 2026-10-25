@@ -343,8 +343,8 @@ begin
   -- Handing the lead to someone else takes the old lead off, so they cannot hold it up.
   select * into result from public.set_submission_reviewers(
     organization_id, lead_passed, 1, array[first_id], null, first_id);
-  select * into result from public.assign_internal_submission(
-    organization_id, lead_passed, result.revision, second_id, first_id);
+  select * into result from public.set_submission_reviewers(
+    organization_id, lead_passed, result.revision, array[second_id], null, first_id);
   if exists (select 1 from public.submission_reviewers where submission_id = lead_passed and user_id = first_id) then
     raise exception 'The old lead stayed a reviewer after the lead was handed on.';
   end if;

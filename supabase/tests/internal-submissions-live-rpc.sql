@@ -363,11 +363,12 @@ begin
   end if;
 
   begin
-    perform public.assign_internal_submission(
+    perform public.set_submission_reviewers(
       organization_id,
       submission_id,
       3,
-      actor_id,
+      array[actor_id],
+      null,
       manager_id
     );
     raise exception 'Staff assignee unexpectedly passed the eligibility guard.';
@@ -377,11 +378,12 @@ begin
   end;
 
   begin
-    perform public.assign_internal_submission(
+    perform public.set_submission_reviewers(
       organization_id,
       submission_id,
       2,
-      reviewer_id,
+      array[reviewer_id],
+      null,
       manager_id
     );
     raise exception 'Stale assignment unexpectedly changed the submission.';
@@ -402,11 +404,12 @@ begin
 
   select *
   into submission_record
-  from public.assign_internal_submission(
+  from public.set_submission_reviewers(
     organization_id,
     submission_id,
     3,
-    manager_id,
+    array[manager_id],
+    null,
     manager_id
   );
 
@@ -418,11 +421,12 @@ begin
     raise exception 'Valid assignment did not atomically start manager review.';
   end if;
 
-  perform public.assign_internal_submission(
+  perform public.set_submission_reviewers(
     organization_id,
     submission_id,
     3,
-    manager_id,
+    array[manager_id],
+    null,
     manager_id
   );
 
@@ -633,11 +637,12 @@ begin
 
   select *
   into submission_record
-  from public.assign_internal_submission(
+  from public.set_submission_reviewers(
     organization_id,
     submission_id,
     7,
-    manager_id,
+    array[manager_id],
+    null,
     manager_id
   );
 
@@ -648,11 +653,12 @@ begin
 
   select *
   into submission_record
-  from public.assign_internal_submission(
+  from public.set_submission_reviewers(
     organization_id,
     submission_id,
     8,
-    reviewer_id,
+    array[reviewer_id],
+    null,
     manager_id
   );
 
@@ -749,17 +755,19 @@ begin
     )
   into evidence_count;
 
-  if evidence_count <> 17 then
-    raise exception 'Rejected comments or reviewer decisions left partial evidence.';
+  -- 19: handing review on records the old lead coming off (reviewer_removed).
+  if evidence_count <> 19 then
+    raise exception 'Rejected comments or reviewer decisions left partial evidence (% rows).', evidence_count;
   end if;
 
   select *
   into submission_record
-  from public.assign_internal_submission(
+  from public.set_submission_reviewers(
     organization_id,
     submission_id,
     9,
-    manager_id,
+    array[manager_id],
+    null,
     manager_id
   );
 
@@ -818,22 +826,25 @@ begin
     raise exception 'Review lifecycle produced an unexpected comment count.';
   end if;
 
-  if (
-    select count(*)
-    from public.submission_activity_events activity
-    where activity.org_id = organization_id
-      and activity.submission_id = submission_workflow_test.submission_id
-  ) <> 10 then
-    raise exception 'Review lifecycle produced an unexpected activity count.';
+  select count(*)
+  into evidence_count
+  from public.submission_activity_events activity
+  where activity.org_id = organization_id
+    and activity.submission_id = submission_workflow_test.submission_id;
+
+  -- 12 and 13 below: both hand-overs record the old lead coming off (reviewer_removed).
+  if evidence_count <> 12 then
+    raise exception 'Review lifecycle produced an unexpected activity count (%).', evidence_count;
   end if;
 
-  if (
-    select count(*)
-    from public.audit_logs audit
-    where audit.org_id = organization_id
-      and audit.target_id = submission_workflow_test.submission_id
-  ) <> 11 then
-    raise exception 'Review lifecycle produced an unexpected audit count.';
+  select count(*)
+  into evidence_count
+  from public.audit_logs audit
+  where audit.org_id = organization_id
+    and audit.target_id = submission_workflow_test.submission_id;
+
+  if evidence_count <> 13 then
+    raise exception 'Review lifecycle produced an unexpected audit count (%).', evidence_count;
   end if;
 
   if (
